@@ -50,19 +50,19 @@ window.exports = {
                     logger.error("获取列表失败",e)
                     utools.showNotification("获取列表失败：" + e.message);
                     if (e instanceof GoConfigError){
-                        utools.redirect('多开配置')
+                        utools.redirect('微信多开配置')
                     }
                     return
                 }
                 list.unshift({
                     title: "多开一个微信",
-                    description: "多开一个微信,登陆后记得回来输入“确认登陆”保存登陆信息",
+                    description: "多开一个微信,登录后记得回搜索框输入“wxok”或“多开确认”保存登录信息",
                     icon: "./logo.png",
                     id: 0
                 })
                 list.unshift({
-                    title: "广告",
-                    description: "如果好用的话，麻烦帮忙点赞，或者赞助支持一下！！！",
+                    title: "鼓励一下",
+                    description: "如果好用的话，麻烦大家帮忙点赞，评论多多支持一下！！！",
                     icon: "./logo.png",
                     id: 0
                 })
@@ -80,13 +80,13 @@ window.exports = {
                 list = list.filter(item => item.title.includes(searchWord))
                 list.unshift({
                     title: "多开一个微信",
-                    description: "多开一个微信,登陆后记得回来输入“确认登陆”保存登陆信息",
+                    description: "多开一个微信,登录后记得回搜索框输入“wxok”或“多开确认”保存登录信息",
                     icon: "./logo.png",
                     id: 0
                 })
                 list.unshift({
-                    title: "广告",
-                    description: "如果好用的话，麻烦帮忙点赞，或者赞助支持一下！！！",
+                    title: "鼓励一下",
+                    description: "如果好用的话，麻烦大家帮忙点赞，评论多多支持一下！！！",
                     icon: "./logo.png",
                     id: 0
                 })
@@ -107,7 +107,7 @@ window.exports = {
                     logger.error("启动微信失败",e)
                     utools.showNotification("启动失败：" + e.message);
                     if (e instanceof GoConfigError){
-                        utools.redirect('多开配置')
+                        utools.redirect('微信多开配置')
                     }
                     return
                 }
@@ -130,7 +130,7 @@ window.exports = {
                     logger.error("获取列表失败",e)
                     utools.showNotification("获取列表失败：" + e.message);
                     if (e instanceof GoConfigError){
-                        utools.redirect('多开配置')
+                        utools.redirect('微信多开配置')
                     }
                     return
                 }
@@ -174,7 +174,7 @@ window.exports = {
                     logger.error("快开启动失败" , typeof e,e)
                     utools.showNotification("启动失败：" + e.message);
                     if (e instanceof GoConfigError){
-                        window.utools.redirect('多开配置')
+                        window.utools.redirect('微信多开配置')
                     }
                     return
                 }
@@ -196,7 +196,7 @@ window.exports = {
                     logger.error("保存微信账号失败",e)
                     utools.showNotification("保存失败：" + e.message);
                     if (e instanceof GoConfigError){
-                        utools.redirect('多开配置')
+                        utools.redirect('微信多开配置')
                     }
                 }
 
@@ -237,13 +237,13 @@ window.exports = {
                 let list = [];
                 list.push({
                     title: "使用须知",
-                    description: "当前只支持4.0+微信版本，低版本请使用旧版N开插件",
+                    description: "当前只支持4.0+微信版本，低版本请市场搜索使用blowsnow作者旧版N开插件",
                     icon: "./logo.png",
                     id: -1
                 })
                 list.push({
-                    title: "广告",
-                    description: "如果好用的话，麻烦帮忙点赞，或者赞助支持一下！！！",
+                    title: "鼓励一下",
+                    description: "如果好用的话，麻烦大家帮忙点赞，评论多多支持一下！！！",
                     icon: "./logo.png",
                     id: -2
                 })
@@ -254,8 +254,8 @@ window.exports = {
                     id: 0
                 })
                 list.push({
-                    title: "第二步. 设置微信文档路径",
-                    description: "获取方法：微信-设置-存储位置，跳到存储位置，复制文件夹然后粘贴当前路径到Utools输入框",
+                    title: "第二步. 设置微信文档路径(4.0+版本默认是xwechat_files文件夹)",
+                    description: "获取方法：微信-账号与存储-存储位置-更改-复制路径,打开文件夹,拖动xwechat_files文件夹然后粘贴到Utools输入框",
                     icon: "./logo.png",
                     id: 1
                 })
@@ -274,7 +274,7 @@ window.exports = {
                         utools.showNotification("下载失败：" + e.message);
                     }
                 }else if (itemData.id === 1){
-                    utools.showNotification("获取方法：微信-设置-存储位置，跳到存储位置，复制文件夹然后粘贴当前路径到Utools输入框");
+                    utools.showNotification("获取方法：微信-账号与存储-存储位置-更改-复制路径,打开文件夹,拖动xwechat_files文件夹然后粘贴到Utools输入框");
                 }
 
                 utools.outPlugin();

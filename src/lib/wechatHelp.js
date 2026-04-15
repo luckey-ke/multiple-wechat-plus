@@ -192,7 +192,7 @@ class WechatHelp {
     async startWx(itemData=null) {
         let wechatFilePath = await this.#getWechatDocumentPath();
 
-        // 重新登陆一个新的微信账号
+        // 重新登录一个新的微信账号
         if (itemData){
             if (!fs.existsSync(itemData.path)){
                 throw new Error("微信账号信息不存在");
@@ -272,7 +272,7 @@ class WechatHelp {
         // 3. 启动微信
         window.utools.shellOpenPath(binPath);
 
-        utools.showNotification("登陆完成后请自行保存微信登录信息")
+        utools.showNotification("登录完成后请在搜索框输入“wxok”保存微信登录信息,下次直接登录")
     }
 
     deleteWechat(itemData) {
@@ -283,7 +283,7 @@ class WechatHelp {
     }
 
     /**
-     * 保存微信登陆数据
+     * 保存微信登录数据
      * @returns {{id}|*}
      */
     async saveWxData(){
@@ -292,12 +292,12 @@ class WechatHelp {
         // 查找 \all_users\login 目录下的 key_info.db 文件最后更新时间
         let loginPath = path.join(wechatFilePath, "all_users", "login");
         if (!fs.existsSync(loginPath)){
-            throw new Error("微信登陆目录不存在，请检查是否已登录/微信文档路径有误");
+            throw new Error("微信登录目录不存在，请检查是否已登录/微信文档路径有误");
         }
 
         const latestPath = findLatestFile(loginPath, "key_info.db-shm")
         if (!latestPath){
-            throw new Error("微信登陆目录下没有 key_info.db 文件");
+            throw new Error("微信登录目录下没有 key_info.db 文件");
         }
 
         // wxid
@@ -309,7 +309,7 @@ class WechatHelp {
             throw new Error("获取微信用户数据失败");
         }
 
-        // 备份一次下次快捷登陆使用
+        // 备份一次下次快捷登录使用
         const wxidPath = path.join(wechatFilePath, "all_users", "plugin_save_config", wxData.id);
         if (!fs.existsSync(wxidPath)){
             fs.mkdirSync(wxidPath, {recursive: true});
@@ -330,7 +330,7 @@ class WechatHelp {
             isLogin: this.isAccountLoggedIn(wechatFilePath + "\\" + wxid)
         }
 
-        // 记录本次登陆的微信账号信息
+        // 记录本次登录的微信账号信息
         window.dbDevice.setItem("wx_" + wxData.id,JSON.stringify(wxData));
 
         return wxData;
