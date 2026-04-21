@@ -49,18 +49,16 @@ async function buildAccountList() {
             accountPath: data.accountPath
         });
 
-        // 只有超过 1 个账号才显示排序控制项
-        if (total > 1) {
-            list.push({
-                title: `${i > 0 ? '  ⬆️ 上移' : ''}${i > 0 && i < total - 1 ? '   ' : ''}${i < total - 1 ? '⬇️ 下移' : ''}`,
-                description: `调整「${data.name}」的位置`,
-                icon: './logo.png',
-                type: 'reorder',
-                targetId: data.id,
-                canMoveUp: i > 0,
-                canMoveDown: i < total - 1
-            });
-        }
+        // 排序控制项
+        list.push({
+            title: `${i > 0 ? '  ⬆️ 上移' : ''}${i > 0 && i < total - 1 ? '   ' : ''}${i < total - 1 ? '⬇️ 下移' : ''}`,
+            description: `调整「${data.name}」的位置`,
+            icon: './logo.png',
+            type: 'reorder',
+            targetId: data.id,
+            canMoveUp: i > 0,
+            canMoveDown: i < total - 1
+        });
     }
 
     return list;
@@ -173,23 +171,21 @@ function filterList(list, keyword) {
 
 /**
  * 刷新主列表并保持排序顺序
- * @returns {{ list: Array, success: boolean }}
  */
 async function refreshMainList(data) {
     try {
         const accountList = await buildAccountList();
         data.accountList = accountList;
         data.mainList = buildMainList(accountList);
-        return { list: data.mainList, success: true };
     } catch (e) {
         logger.error("刷新列表失败", e);
         utools.showNotification("刷新失败：" + e.message);
         if (e instanceof GoConfigError) {
             data.state = 'config';
-            return { list: buildConfigList(wechatHelp.getConfigStatus()), success: false };
+            return buildConfigList(wechatHelp.getConfigStatus());
         }
-        return { list: data.mainList, success: false };
     }
+    return data.mainList;
 }
 
 // ========== 操作处理 ==========
@@ -420,11 +416,7 @@ window.exports = {
                 if (data.state === 'main') {
                     callbackSetList(filterList(data.mainList, searchWord));
                 } else {
-                    // 配置中心搜索，复用缓存的状态
-                    if (!data._configStatus) {
-                        data._configStatus = wechatHelp.getConfigStatus();
-                    }
-                    callbackSetList(filterList(buildConfigList(data._configStatus), searchWord));
+                    callbackSetList(filterList(buildConfigList(wechatHelp.getConfigStatus()), searchWord));
                 }
             },
 
@@ -452,9 +444,8 @@ window.exports = {
                 }
 
                 if (type === 'refresh') {
-                    const result = await refreshMainList(data);
-                    callbackSetList(result.list);
-                    if (result.success) utools.showNotification("状态已刷新");
+                    callbackSetList(await refreshMainList(data));
+                    utools.showNotification("状态已刷新");
                     return;
                 }
 
@@ -467,8 +458,7 @@ window.exports = {
 
                 if (type === 'reorder') {
                     handleReorder(itemData);
-                    const result = await refreshMainList(data);
-                    callbackSetList(result.list);
+                    callbackSetList(await refreshMainList(data));
                     return;
                 }
 
@@ -476,7 +466,6 @@ window.exports = {
 
                 if (type === 'config') {
                     data.state = 'config';
-                    data._configStatus = null; // 清除缓存，重新检测
                     callbackSetList(buildConfigList(wechatHelp.getConfigStatus()));
                     return;
                 }
@@ -508,8 +497,7 @@ window.exports = {
                 if (type === 'delete') {
                     const deleted = handleDeleteAccount(itemData);
                     if (deleted) {
-                        const result = await refreshMainList(data);
-                        callbackSetList(result.list);
+                        callbackSetList(await refreshMainList(data));
                     }
                     return;
                 }
