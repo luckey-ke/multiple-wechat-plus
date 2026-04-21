@@ -271,7 +271,7 @@ window.startWechat = async (itemData) => {
   if (!fs.existsSync(binPath)) throw new Error('微信EXE不存在: ' + binPath);
 
   utools.shellOpenPath(binPath);
-  utools.showNotification('登录完成后请在搜索框输入 wxok 保存');
+  utools.showNotification('登录完成后点击「保存当前登录」');
 };
 
 window.saveWechat = async () => {

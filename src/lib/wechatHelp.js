@@ -272,7 +272,7 @@ class WechatHelp {
         // 3. 启动微信
         window.utools.shellOpenPath(binPath);
 
-        utools.showNotification("登录完成后请在搜索框输入“wxok”保存微信登录信息,下次直接登录")
+        utools.showNotification("登录完成后点击「保存当前登录」")
     }
 
     deleteWechat(itemData) {

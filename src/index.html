@@ -490,7 +490,7 @@
           <div class="empty-title">${ready ? '暂无已保存的账号' : '请先完成配置'}</div>
           <div class="empty-desc">${
             ready
-              ? '点击「新建多开」启动微信\n登录后输入 wxok 保存账号信息'
+              ? '点击「新建多开」启动微信，登录后点击「保存当前登录」'
               : '请下载 handle.exe 并设置微信文档路径'
           }</div>
         </div>`;
@@ -623,7 +623,7 @@
   async function handleNewWechat() {
     try {
       await window.startWechat(null);
-      toast('微信已启动，登录后输入 wxok 保存');
+      toast('微信已启动，请登录');
     } catch (e) {
       toast('启动失败: ' + e.message, true, 3000);
     }
