@@ -1,43 +1,55 @@
-const {exec} = require('child_process');
-const path = require("node:path");
-const os = require("node:os");
-const fs = require("node:fs");
-const fetch = require('node-fetch');  // 引入 node-fetch@2
+const { exec } = require('child_process');
+const path = require('node:path');
+const os = require('node:os');
+const fs = require('node:fs');
+const fetch = require('node-fetch');
 const AdmZip = require('adm-zip');
-const {GoConfigError} = require("./error");
+const { GoConfigError } = require('./error');
+const { createLogger } = require('./logger');
 
-const basePath = path.join(os.homedir(), "multiple_wechat");
-if (!fs.existsSync(basePath)){
-    fs.mkdirSync(basePath, {recursive: true});
+const logger = createLogger(null); // 输出到 stdout，由 window.logger 统一管理
+
+const basePath = path.join(os.homedir(), 'multiple_wechat');
+if (!fs.existsSync(basePath)) {
+    fs.mkdirSync(basePath, { recursive: true });
 }
-// 1. 设置文件路径和 URL
+
 const HANDLE_EXE_PATH = path.join(basePath, 'handle.exe');
 const HANDLE_ZIP_PATH = path.join(basePath, 'Handle.zip');
 const HANDLE_ZIP_URL = 'https://download.sysinternals.com/files/Handle.zip';
-const WECHAT_MUTEX_NAME = "XWeChat_App_Instance_Identity_Mutex_Name";
+const WECHAT_MUTEX_NAME = 'XWeChat_App_Instance_Identity_Mutex_Name';
 
+/**
+ * 关闭指定进程的指定句柄（提权执行）
+ */
 function closeHandle(pid, handleId) {
-    return new Promise((resolve, reject) => {
-        let powershell = 'powershell'
-        if (fs.existsSync("C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe")){
-            powershell = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
+    return new Promise((resolve) => {
+        let powershell = 'powershell';
+        if (fs.existsSync('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe')) {
+            powershell = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
         }
-        let timer = setTimeout(() => {
+        // 超时兜底：3秒后自动 resolve，避免 UI 卡死
+        const timer = setTimeout(() => {
+            logger.warn('closeHandle 超时，跳过等待');
             resolve();
-        }, 3000)
-        let command = `${powershell} Start-Process "${HANDLE_EXE_PATH}" -ArgumentList @('-c','${handleId}','-p','${pid}','-y') -Verb RunAs -Wait`;
+        }, 3000);
+
+        const command = `${powershell} Start-Process "${HANDLE_EXE_PATH}" -ArgumentList @('-c','${handleId}','-p','${pid}','-y') -Verb RunAs -Wait`;
         exec(command, (err, stdout) => {
-            logger.info(`执行命令：${command}`);
-
-            logger.info(`执行完成`);
-
-            clearTimeout(timer)
+            clearTimeout(timer);
+            if (err) {
+                logger.error('closeHandle 失败', { pid, handleId, error: err.message });
+            } else {
+                logger.info('closeHandle 成功', { pid, handleId });
+            }
             resolve(stdout);
         });
-    })
+    });
 }
 
-// 2. 自动下载 handle.exe（如果不存在）
+/**
+ * 自动下载 handle.exe（如不存在）
+ */
 function downloadHandle() {
     return new Promise((resolve, reject) => {
         if (fs.existsSync(HANDLE_EXE_PATH)) {
@@ -45,103 +57,112 @@ function downloadHandle() {
         }
 
         logger.info('下载 handle.exe...');
-
-        // 下载 ZIP 文件
         fetch(HANDLE_ZIP_URL)
-            .then(res => {
+            .then((res) => {
                 if (res.status !== 200) {
-                    throw new Error('下载失败');
+                    throw new Error('下载失败，HTTP ' + res.status);
                 }
-
-                // 将文件流写入到 Handle.zip
                 const file = fs.createWriteStream(HANDLE_ZIP_PATH);
                 res.body.pipe(file);
-
-                // 下载完成后解压
                 file.on('finish', () => {
                     file.close(() => {
                         logger.info('下载 Handle.zip 完成，正在解压...');
                         try {
                             const zip = new AdmZip(HANDLE_ZIP_PATH);
-                            zip.extractAllTo(basePath, true);  // 解压到当前目录
-                            fs.unlinkSync(HANDLE_ZIP_PATH); // 解压完成后删除 ZIP 文件
+                            zip.extractAllTo(basePath, true);
+                            fs.unlinkSync(HANDLE_ZIP_PATH);
                             resolve('handle.exe 下载并解压成功！');
                         } catch (err) {
-                            logger.error(`解压失败: ${err.message}`)
-                            reject(`解压失败: ${err.message}`);
+                            logger.error('解压失败', err.message);
+                            reject(new Error('解压失败: ' + err.message));
                         }
                     });
                 });
             })
-            .catch(err => {
-                logger.error(`下载失败: ${err.message}`)
-                reject(`下载失败: ${err.message}`)
+            .catch((err) => {
+                logger.error('下载失败', err.message);
+                reject(new Error('下载失败: ' + err.message));
             });
     });
 }
 
-// 3. 查找互斥体并释放
+/**
+ * 查找并释放微信互斥锁
+ */
 function releaseMutex() {
-    if (!fs.existsSync(HANDLE_EXE_PATH)){
-        throw new GoConfigError("handle.exe 不存在，请先下载");
+    if (!fs.existsSync(HANDLE_EXE_PATH)) {
+        throw new GoConfigError('handle.exe 不存在，请先下载');
     }
     return new Promise((resolve, reject) => {
-        exec(`"${HANDLE_EXE_PATH}" -accepteula -p weixin -a ${WECHAT_MUTEX_NAME}`, (err, stdout, stderr) => {
-            if (err || stderr) {
-                logger.error('未能查找到互斥体.')
-                return reject('未能查找到互斥体');
+        exec(
+            `"${HANDLE_EXE_PATH}" -accepteula -p weixin -a ${WECHAT_MUTEX_NAME}`,
+            (err, stdout, stderr) => {
+                if (err || stderr) {
+                    logger.error('未能查找到互斥体');
+                    return reject(new Error('未能查找到互斥体'));
+                }
+
+                const match = stdout.match(/pid: (\d+)\s+type: (.*?)\s+([a-zA-Z0-9]+):/i);
+                if (!match) {
+                    logger.info('未找到互斥体（可能无多开锁）');
+                    return resolve(); // 没找到锁不算错误
+                }
+
+                const [, pid, , handleId] = match;
+                logger.info(`找到互斥体：PID=${pid}, 句柄=${handleId}`);
+                closeHandle(pid, handleId).then(resolve).catch(reject);
             }
-
-            const match = stdout.match(/pid: (\d+)\s+type: (.*?)\s+([a-zA-Z0-9]+):/i);
-            if (!match) {
-                logger.error('未能查找到互斥体.')
-                return reject('未找到互斥体');
-            }
-
-            const [, pid, type, handleId] = match;
-            logger.info(`找到互斥体：PID=${pid}, 句柄=${handleId}`);
-
-            closeHandle(pid, handleId)
-                .then(resolve)
-                .catch(reject)
-        });
+        );
     });
 }
 
 /**
- * 关闭其他程序对文件的锁
- * @param {string} filePath - 文件路径
+ * 释放指定文件的句柄锁
+ * @param {string} filePath - 被锁的文件路径
  */
 function releaseFileLock(filePath) {
+    if (!fs.existsSync(HANDLE_EXE_PATH)) {
+        throw new GoConfigError('handle.exe 不存在，请先下载');
+    }
     return new Promise((resolve, reject) => {
-        exec(`${HANDLE_EXE_PATH} -p weixin "${filePath}"`, (err, stdout, stderr) => {
+        exec(`"${HANDLE_EXE_PATH}" -p weixin "${filePath}"`, (err, stdout, stderr) => {
             if (err) {
-                logger.error(`Error finding file lock: ${stderr || err.message}`)
-                return reject(`Error finding file lock: ${stderr || err.message}`);
+                logger.error('查找文件锁失败', stderr || err.message);
+                return reject(new Error('查找文件锁失败: ' + (stderr || err.message)));
             }
 
-            const matches = stdout.match(/pid: (\d+)\s+type: (.*?)\s+([a-zA-Z0-9]+):/ig);
+            const matches = stdout.match(/pid: (\d+)\s+type: (.*?)\s+([a-zA-Z0-9]+):/gi);
             if (!matches) {
-                logger.error('No process or handle found locking the file.')
-                return reject('No process or handle found locking the file.');
+                // 没找到锁 = 没有锁
+                return resolve();
             }
 
-            let pending = matches.length;
-            let hasError = false;
-            for (const content of matches) {
+            // 串行关闭所有句柄，避免竞态
+            let completed = 0;
+            function next() {
+                if (completed >= matches.length) {
+                    return resolve();
+                }
+                const content = matches[completed];
                 const match = content.match(/pid: (\d+)\s+type: (.*?)\s+([a-zA-Z0-9]+):/i);
-                const [, pid, type, handleId] = match;
-                logger.info(`File is locked by process with PID: ${pid}, Handle ID: ${handleId}`);
-                exec(`${HANDLE_EXE_PATH} -c ${handleId} -p ${pid} -y`, (closeErr, closeStdout, closeStderr) => {
-                    if (closeErr && !hasError) {
-                        hasError = true;
-                        return reject(`Error releasing file lock: ${closeStderr || closeErr.message}`);
+                if (!match) {
+                    completed++;
+                    return next();
+                }
+                const [, pid, , handleId] = match;
+                logger.info(`关闭文件锁: PID=${pid}, Handle=${handleId}`);
+                exec(`"${HANDLE_EXE_PATH}" -c ${handleId} -p ${pid} -y`, (closeErr) => {
+                    if (closeErr) {
+                        logger.error('关闭句柄失败', { pid, handleId, error: closeErr.message });
+                        // 继续尝试关闭其他句柄
+                    } else {
+                        logger.info(`句柄 ${handleId} 已释放`);
                     }
-                    logger.info(`Handle ${handleId} for PID ${pid} released successfully.`);
-                    pending--;
-                    if (pending === 0 && !hasError) resolve();
+                    completed++;
+                    next();
                 });
             }
+            next();
         });
     });
 }
@@ -150,5 +171,7 @@ module.exports = {
     releaseMutex,
     downloadHandle,
     releaseFileLock,
-    HANDLE_EXE_PATH
-}
+    closeHandle,
+    HANDLE_EXE_PATH,
+    WECHAT_MUTEX_NAME,
+};

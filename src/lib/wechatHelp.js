@@ -1,12 +1,10 @@
-
-const fs = require("fs");
-const pr = require("child_process");
-const iconv = require("iconv-lite");
-const path = require("node:path");
-const {findLatestFile, findLatestFileAll, findDirName} = require("./file");
-const {releaseMutex, downloadHandle, releaseFileLock} = require("./kill");
-const {GoConfigError} = require("./error");
-
+const fs = require('fs');
+const pr = require('child_process');
+const iconv = require('iconv-lite');
+const path = require('node:path');
+const { findLatestFile, findLatestFileAll, findDirName } = require('./file');
+const { releaseMutex, releaseFileLock } = require('./kill');
+const { GoConfigError } = require('./error');
 
 class WechatHelp {
     constructor() {
@@ -14,366 +12,330 @@ class WechatHelp {
     }
 
     /**
-     * 获取微信文档路径
-     * @returns {Promise<void>}
+     * 获取微信文档路径（多级回退）
      */
     async #getWechatDocumentPath() {
-        let wechatDocumentPath = this.wechatDocumentPath;
-        if (wechatDocumentPath && fs.existsSync(wechatDocumentPath)){
-            return wechatDocumentPath
-        }
-        // 1. 尝试从数据库中获取记录的微信文档目录路径
-        wechatDocumentPath = window.dbDevice.getItem("wechatFilePath");
-
-        // 2. 尝试从获取默认微信文档目录路径
-        if (!fs.existsSync(wechatDocumentPath)){
-            let documents = window.utools.getPath('documents');
-            wechatDocumentPath = documents + "\\xwechat_files";
-
-            logger.info("init local wechatFilePath",wechatDocumentPath);
+        // 1. 内存缓存
+        if (this.wechatDocumentPath && fs.existsSync(this.wechatDocumentPath)) {
+            return this.wechatDocumentPath;
         }
 
-        // 3. 尝试从注册表中获取微信文档目录路径
-        if (!fs.existsSync(wechatDocumentPath)){
+        // 2. 数据库存储
+        let wechatDocumentPath = window.dbDevice.getItem('wechatFilePath');
+        if (wechatDocumentPath && fs.existsSync(wechatDocumentPath)) {
+            this.wechatDocumentPath = wechatDocumentPath;
+            return wechatDocumentPath;
+        }
+
+        // 3. 默认路径
+        const documents = window.utools.getPath('documents');
+        wechatDocumentPath = path.join(documents, 'xwechat_files');
+        logger.info('尝试默认路径', wechatDocumentPath);
+
+        if (!fs.existsSync(wechatDocumentPath)) {
+            // 4. 注册表
             wechatDocumentPath = await this.#getRegWechatFilePath();
-
-            logger.info("init reg wechatFilePath",wechatDocumentPath);
+            logger.info('尝试注册表路径', wechatDocumentPath);
         }
 
-        if (!fs.existsSync(wechatDocumentPath)){
-            throw new GoConfigError("文档路径不存在")
+        if (!wechatDocumentPath || !fs.existsSync(wechatDocumentPath)) {
+            throw new GoConfigError('微信文档路径不存在，请先设置');
         }
 
         this.wechatDocumentPath = wechatDocumentPath;
-
         return wechatDocumentPath;
     }
 
-    saveWechatFilePath(tmpWechatDocumentPath){
-        // 校验微信文档目录是否有问题
-        let dataPath = path.join(tmpWechatDocumentPath, "all_users", "config", "global_config");
-        if (!fs.existsSync(dataPath)){
-            throw new Error("微信文档路径不正确")
+    /**
+     * 保存并校验微信文档路径
+     */
+    saveWechatFilePath(tmpWechatDocumentPath) {
+        const dataPath = path.join(tmpWechatDocumentPath, 'all_users', 'config', 'global_config');
+        if (!fs.existsSync(dataPath)) {
+            throw new Error('微信文档路径不正确：缺少 all_users/config/global_config');
         }
-
         this.wechatDocumentPath = tmpWechatDocumentPath;
-
-        window.dbDevice.setItem("wechatFilePath", tmpWechatDocumentPath);
+        window.dbDevice.setItem('wechatFilePath', tmpWechatDocumentPath);
     }
 
     /**
-     * 从注册表中获取微信文档路径
-     * @returns {Promise<unknown>}
+     * 从注册表获取微信文档路径
      */
-    #getRegWechatFilePath(){
-        // 从注册表中获取微信文档路径
-        const CODE_PAGE = {
-            '936': 'gbk',
-            '65001': 'utf-8'
-        };
+    #getRegWechatFilePath() {
+        return this.#queryRegistry(
+            'HKEY_CURRENT_USER\\Software\\Tencent\\WeChat /v FileSavePath'
+        );
+    }
+
+    /**
+     * 从注册表获取微信 EXE 路径
+     */
+    #getRegWechatExeFilePath() {
+        return this.#queryRegistry(
+            'HKEY_CURRENT_USER\\Software\\Tencent\\Weixin /v InstallPath'
+        );
+    }
+
+    /**
+     * 统一注册表查询（自动处理编码）
+     */
+    #queryRegistry(regQuery) {
+        const CODE_PAGE = { '936': 'gbk', '65001': 'utf-8' };
 
         return new Promise((resolve, reject) => {
-            pr.exec('chcp', function (_err, _stdout, _stderr){
-                if (_err) {
-                    return reject(_err)
-                }
-                const page = _stdout.replace(/[^0-9]/ig, "");
-                let _encoding = CODE_PAGE[page]
+            pr.exec('chcp', (_err, _stdout) => {
+                if (_err) return reject(_err);
 
-                pr.exec("REG QUERY HKEY_CURRENT_USER\\Software\\Tencent\\WeChat /v FileSavePath",{ encoding: 'buffer'},function(error,stdout,stderr){
-                    if (error) {
-                        return reject(error)
-                    }
-                    let data;
-                    if (_encoding === 'utf8'){
-                        data = stdout.toString()
-                    }else{
-                        data = iconv.decode(stdout, "gbk").toString()
-                    }
-                    logger.info("getRegWechatFilePath",data);
-                    let matches = data.match(/[a-zA-Z]*?:.*/)
-                    if (matches) return resolve(matches[0]);
+                const page = _stdout.replace(/[^0-9]/g, '');
+                const encoding = CODE_PAGE[page] || 'gbk';
 
-                    resolve(null)
+                pr.exec(`REG QUERY ${regQuery}`, { encoding: 'buffer' }, (error, stdout) => {
+                    if (error) return reject(error);
+
+                    const data = encoding === 'utf8'
+                        ? stdout.toString()
+                        : iconv.decode(stdout, 'gbk').toString();
+
+                    logger.info('注册表查询', regQuery, data);
+                    const matches = data.match(/[a-zA-Z]*?:.*/);
+                    resolve(matches ? matches[0] : null);
                 });
-            })
-        })
-
-    }
-
-    #getRegWechatExeFilePath(){
-        // 从注册表中获取微信exe路径
-        const CODE_PAGE = {
-            '936': 'gbk',
-            '65001': 'utf-8'
-        };
-
-        return new Promise((resolve, reject) => {
-            pr.exec('chcp', function (_err, _stdout, _stderr){
-                if (_err) {
-                    return reject(_err)
-                }
-                const page = _stdout.replace(/[^0-9]/ig, "");
-                let _encoding = CODE_PAGE[page]
-
-                pr.exec("REG QUERY HKEY_CURRENT_USER\\Software\\Tencent\\Weixin /v InstallPath",{ encoding: 'buffer'},function(error,stdout,stderr){
-                    if (error) {
-                        return reject(error)
-                    }
-                    let data;
-                    if (_encoding === 'utf8'){
-                        data = stdout.toString()
-                    }else{
-                        data = iconv.decode(stdout, "gbk").toString()
-                    }
-                    logger.info("getRegWechatExeFilePath",data);
-                    let matches = data.match(/[a-zA-Z]*?:.*/)
-                    if (matches) return resolve(matches[0]);
-
-                    resolve(null)
-                });
-            })
-        })
-    }
-
-
-    async getLocalWechatAccountList() {
-        let wechatFilePath = await this.#getWechatDocumentPath();
-        let configDirPath = path.join(wechatFilePath, "all_users", "plugin_save_config");
-        let wxList = [];
-
-        if (!fs.existsSync(configDirPath)){
-            return wxList;
-        }
-        let paths = fs.readdirSync(configDirPath);
-
-        logger.info("扫到本地记录的文件列表", paths)
-
-        for (const path of paths) {
-            const wxidPath = configDirPath + "\\" + path
-            const wxidStats = fs.statSync(wxidPath);
-            if (!wxidStats.isDirectory()) continue;
-            const wxid = wxidPath.split("\\").pop();
-
-            const wxidRealPath = findDirName(wechatFilePath, wxid)
-
-            logger.info("保存wxidRealPath", wxidRealPath, wxidPath + "\\logo.png");
-
-            wxList.push({
-                id: wxid,
-                logo: wxidPath + "\\logo.png",
-                name: wxid,
-                path: wxidPath,
-                accountPath: wxidRealPath,
-                isLogin: this.isAccountLoggedIn(wxidRealPath)
-            });
-        }
-        return wxList;
-    }
-
-    async execShell(cmd){
-        return new Promise((resolve, reject) => {
-            pr.exec(cmd, { encoding: 'utf8' }, (error, stdout, stderr) => {
-                if (error) {
-                    logger.error("执行命令失败", { cmd, error });
-                    reject(error);
-                } else {
-                    resolve(stdout.trim());
-                }
             });
         });
     }
 
     /**
-     * 启动微信
-     * @returns {Promise<void>}
-     * @param itemData
+     * 获取本地已保存的微信账号列表
      */
-    async startWx(itemData=null) {
-        let wechatFilePath = await this.#getWechatDocumentPath();
+    async getLocalWechatAccountList() {
+        const wechatFilePath = await this.#getWechatDocumentPath();
+        const configDirPath = path.join(wechatFilePath, 'all_users', 'plugin_save_config');
+        const wxList = [];
 
-        // 重新登录一个新的微信账号
-        if (itemData){
-            if (!fs.existsSync(itemData.path)){
-                throw new Error("微信账号信息不存在");
+        if (!fs.existsSync(configDirPath)) {
+            return wxList;
+        }
+
+        const entries = fs.readdirSync(configDirPath);
+        logger.info('扫描到本地记录', entries);
+
+        for (const entry of entries) {
+            const wxidPath = path.join(configDirPath, entry);
+            const stats = fs.statSync(wxidPath);
+            if (!stats.isDirectory()) continue;
+
+            const wxid = entry;
+            const wxidRealPath = findDirName(wechatFilePath, wxid);
+            const logoPath = path.join(wxidPath, 'logo.png');
+
+            logger.info('保存账号', { wxidRealPath, logoPath });
+
+            wxList.push({
+                id: wxid,
+                logo: logoPath,
+                name: wxid,
+                path: wxidPath,
+                accountPath: wxidRealPath,
+                isLogin: wxidRealPath ? this.isAccountLoggedIn(wxidRealPath) : false,
+            });
+        }
+        return wxList;
+    }
+
+    /**
+     * 执行 shell 命令
+     */
+    execShell(cmd) {
+        return new Promise((resolve, reject) => {
+            pr.exec(cmd, { encoding: 'utf8' }, (error, stdout) => {
+                if (error) {
+                    logger.error('执行命令失败', { cmd, error: error.message });
+                    return reject(error);
+                }
+                resolve(stdout.trim());
+            });
+        });
+    }
+
+    /**
+     * 启动微信（支持指定账号或新建多开）
+     */
+    async startWx(itemData = null) {
+        const wechatFilePath = await this.#getWechatDocumentPath();
+
+        if (itemData) {
+            if (!fs.existsSync(itemData.path)) {
+                throw new Error('微信账号信息不存在');
             }
 
-            const configPath = wechatFilePath + "\\all_users\\config\\global_config";
-            const crcPath = wechatFilePath + "\\all_users\\config\\global_config.crc";
+            const configPath = path.join(wechatFilePath, 'all_users', 'config', 'global_config');
+            const crcPath = configPath + '.crc';
 
-            // ★ 4.0+ 修复：不杀进程，只释放文件句柄（handle.exe 关闭锁，不 kill 进程）
+            // 释放文件锁（不杀进程，只释放 handle）
             let lockReleased = false;
             try {
                 await releaseFileLock(configPath);
                 lockReleased = true;
-                logger.info("成功释放 global_config 文件锁");
+                logger.info('成功释放 global_config 文件锁');
             } catch (e) {
-                logger.warn("releaseFileLock 失败，尝试 rename 策略", e?.message);
+                logger.warn('releaseFileLock 失败，尝试 rename 策略', e?.message);
             }
+
             try {
                 await releaseFileLock(crcPath);
             } catch (e) {
-                logger.warn("释放 global_config.crc 锁失败", e?.message);
+                logger.warn('释放 global_config.crc 锁失败', e?.message);
             }
 
-            // 策略1：直接删除+复制（文件锁已释放时）
+            // 策略1：直接替换（文件锁已释放时）
             if (lockReleased) {
                 try {
                     fs.rmSync(configPath, { force: true });
                     fs.rmSync(crcPath, { force: true });
-                    fs.copyFileSync(itemData.path + "\\global_config", configPath);
-                    fs.copyFileSync(itemData.path + "\\global_config.crc", crcPath);
+                    fs.copyFileSync(path.join(itemData.path, 'global_config'), configPath);
+                    fs.copyFileSync(path.join(itemData.path, 'global_config.crc'), crcPath);
                 } catch (e) {
-                    logger.error("直接复制失败，尝试 rename 策略", e?.message);
+                    logger.error('直接复制失败，尝试 rename 策略', e?.message);
                     lockReleased = false;
                 }
             }
 
-            // 策略2：rename 旧文件（Windows 允许 rename 被锁定的文件），再复制新文件
+            // 策略2：rename 旧文件再复制（Windows 允许 rename 被锁文件）
             if (!lockReleased) {
                 try {
                     if (fs.existsSync(configPath)) {
-                        fs.renameSync(configPath, configPath + ".bak");
+                        fs.renameSync(configPath, configPath + '.bak');
                     }
                     if (fs.existsSync(crcPath)) {
-                        fs.renameSync(crcPath, crcPath + ".bak");
+                        fs.renameSync(crcPath, crcPath + '.bak');
                     }
-                    fs.copyFileSync(itemData.path + "\\global_config", configPath);
-                    fs.copyFileSync(itemData.path + "\\global_config.crc", crcPath);
+                    fs.copyFileSync(path.join(itemData.path, 'global_config'), configPath);
+                    fs.copyFileSync(path.join(itemData.path, 'global_config.crc'), crcPath);
                 } catch (e) {
-                    logger.error("rename 策略也失败了", e?.message);
-                    throw new Error("无法替换 global_config 文件，请手动关闭微信后重试: " + e.message);
+                    logger.error('rename 策略也失败', e?.message);
+                    throw new Error('无法替换配置文件，请手动关闭微信后重试: ' + e.message);
                 }
             }
-        }else{
-            fs.rmSync(wechatFilePath + "\\all_users\\config\\global_config", { force: true });
-            fs.rmSync(wechatFilePath + "\\all_users\\config\\global_config.crc", { force: true });
+        } else {
+            // 新建多开：清除配置
+            const configPath = path.join(wechatFilePath, 'all_users', 'config', 'global_config');
+            fs.rmSync(configPath, { force: true });
+            fs.rmSync(configPath + '.crc', { force: true });
         }
 
-        logger.info("startWx")
+        // 释放互斥锁
+        try {
+            await releaseMutex();
+        } catch (e) {
+            logger.error('释放互斥锁失败', e?.message);
+        }
 
-        // 1. 杀掉互斥进程
-        await releaseMutex().catch(e => {
-            logger.error("杀进程锁失败", {
-                message: e?.message,
-                stack: e?.stack
-            })
-        })
-
-        // 2. 获取微信进程路径
+        // 获取微信 EXE 路径
         let binPath = await this.#getRegWechatExeFilePath();
-        binPath = binPath + "\\Weixin.exe"
-        logger.info("binPath", binPath)
-        if (!binPath || !fs.existsSync(binPath)){
-            throw new Error("获取微信EXE路径失败");
+        binPath = path.join(binPath, 'Weixin.exe');
+        logger.info('微信路径', binPath);
+
+        if (!binPath || !fs.existsSync(binPath)) {
+            throw new Error('获取微信EXE路径失败，请确认微信已安装');
         }
 
-
-        // 3. 启动微信
         window.utools.shellOpenPath(binPath);
-
-        utools.showNotification("登录完成后点击「保存当前登录」")
-    }
-
-    deleteWechat(itemData) {
-        if (!fs.existsSync(itemData.path)){
-            throw new Error("微信账号信息不存在");
-        }
-        fs.rmSync(itemData.path, {recursive: true, force: true});
+        utools.showNotification('登录完成后点击「保存当前登录」');
     }
 
     /**
-     * 保存微信登录数据
-     * @returns {{id}|*}
+     * 删除已保存的账号
      */
-    async saveWxData(){
-        let wechatFilePath = await this.#getWechatDocumentPath();
+    deleteWechat(itemData) {
+        if (!fs.existsSync(itemData.path)) {
+            throw new Error('微信账号信息不存在');
+        }
+        fs.rmSync(itemData.path, { recursive: true, force: true });
+    }
 
-        // 查找 \all_users\login 目录下的 key_info.db 文件最后更新时间
-        let loginPath = path.join(wechatFilePath, "all_users", "login");
-        if (!fs.existsSync(loginPath)){
-            throw new Error("微信登录目录不存在，请检查是否已登录/微信文档路径有误");
+    /**
+     * 保存当前登录的微信数据
+     */
+    async saveWxData() {
+        const wechatFilePath = await this.#getWechatDocumentPath();
+
+        const loginPath = path.join(wechatFilePath, 'all_users', 'login');
+        if (!fs.existsSync(loginPath)) {
+            throw new Error('微信登录目录不存在，请检查是否已登录');
         }
 
-        const latestPath = findLatestFile(loginPath, "key_info.db-shm")
-        if (!latestPath){
-            throw new Error("微信登录目录下没有 key_info.db 文件");
+        const latestPath = findLatestFile(loginPath, 'key_info.db-shm');
+        if (!latestPath) {
+            throw new Error('未找到 key_info.db 文件，可能未登录微信');
         }
 
-        // wxid
-        let wxid = latestPath.split("\\").pop();
-        let wxData = {
+        const wxid = path.basename(latestPath);
+        if (!wxid) {
+            throw new Error('获取微信用户数据失败');
+        }
+
+        // 备份配置
+        const wxidPath = path.join(wechatFilePath, 'all_users', 'plugin_save_config', wxid);
+        if (!fs.existsSync(wxidPath)) {
+            fs.mkdirSync(wxidPath, { recursive: true });
+        }
+
+        const configSrc = path.join(wechatFilePath, 'all_users', 'config', 'global_config');
+        const crcSrc = configSrc + '.crc';
+        if (!fs.existsSync(configSrc)) {
+            throw new Error('global_config 文件不存在');
+        }
+
+        fs.copyFileSync(configSrc, path.join(wxidPath, 'global_config'));
+        fs.copyFileSync(crcSrc, path.join(wxidPath, 'global_config.crc'));
+
+        // 复制最新头像
+        const headImgDir = path.join(wechatFilePath, 'all_users', 'head_imgs', '0');
+        if (fs.existsSync(headImgDir)) {
+            const lastImgPath = findLatestFileAll(headImgDir);
+            if (lastImgPath) {
+                fs.copyFileSync(lastImgPath, path.join(wxidPath, 'logo.png'));
+            }
+        }
+
+        const wxData = {
             id: wxid,
-        }
-        if (!wxData || !wxData.id){   // 获取失败了
-            throw new Error("获取微信用户数据失败");
-        }
-
-        // 备份一次下次快捷登录使用
-        const wxidPath = path.join(wechatFilePath, "all_users", "plugin_save_config", wxData.id);
-        if (!fs.existsSync(wxidPath)){
-            fs.mkdirSync(wxidPath, {recursive: true});
-        }
-
-        fs.copyFileSync(wechatFilePath + "\\all_users\\config\\global_config",wxidPath + "\\global_config");
-        fs.copyFileSync(wechatFilePath + "\\all_users\\config\\global_config.crc",wxidPath + "\\global_config.crc");
-        const lastImgPath = findLatestFileAll(wechatFilePath + "\\all_users\\head_imgs\\0")
-        if (lastImgPath){
-            fs.copyFileSync(lastImgPath,wxidPath + "\\logo.png");
-        }
-
-        wxData = {
-            id: wxid,
-            logo: wxidPath + "\\logo.png",
+            logo: path.join(wxidPath, 'logo.png'),
             name: wxid,
             path: wxidPath,
-            isLogin: this.isAccountLoggedIn(wechatFilePath + "\\" + wxid)
-        }
+            isLogin: this.isAccountLoggedIn(path.join(wechatFilePath, wxid)),
+        };
 
-        // 记录本次登录的微信账号信息
-        window.dbDevice.setItem("wx_" + wxData.id,JSON.stringify(wxData));
-
+        window.dbDevice.setItem('wx_' + wxData.id, JSON.stringify(wxData));
         return wxData;
     }
 
-    isAccountLoggedIn(accountPath){
+    /**
+     * 检查账号是否在线（通过消息数据库文件判断）
+     */
+    isAccountLoggedIn(accountPath) {
         const msgFolder = path.join(accountPath, 'db_storage', 'message');
-        logger.info(`检查 ${msgFolder} 中`);
+        logger.info('检查登录状态', msgFolder);
+
         if (!fs.existsSync(msgFolder)) {
-            logger.info(`检查 ${msgFolder} 不存在，跳过`);
             return false;
         }
 
         let shmCount = 0;
         let walCount = 0;
-
         const files = fs.readdirSync(msgFolder);
+
         for (const file of files) {
-            if (file.endsWith('.db-shm')) {
-                shmCount += 1;
-                logger.info(`有 ${shmCount} 个 shm`);
-            } else if (file.endsWith('.db-wal')) {
-                walCount += 1;
-            }
+            if (file.endsWith('.db-shm')) shmCount++;
+            else if (file.endsWith('.db-wal')) walCount++;
 
             if (shmCount >= 4 && walCount >= 4) {
-                logger.info("CheckLogined：已经符合了");
                 return true;
             }
         }
-
         return false;
     }
-
 }
 
-
-let wechatHelp = new WechatHelp();
-// wechatHelp.wechatFilePath = 'D:\\Administrator\\Documents\\WeChat Files'
-// wechatHelp.getLocalWechatAccountList().then(r => r => {
-//     console.log(r);
-// })
-// console.log(wechatHelp.isAccountLoggedIn('D:\\Administrator\\Documents\\WeChat Files\\wxid_yjvyrw614h6p22'))
-module.exports = {
-    wechatHelp,
-};
+const wechatHelp = new WechatHelp();
+module.exports = { wechatHelp };
