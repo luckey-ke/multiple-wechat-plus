@@ -92,40 +92,46 @@ class WechatHelp {
     }
 
     /**
+     * 从注册表查询指定路径
+     * @param {string} keyPath - 注册表路径
+     * @param {string} valueName - 值名称
+     * @returns {Promise<string|null>}
+     */
+    #queryRegistry(keyPath, valueName) {
+        const CODE_PAGE = { '936': 'gbk', '65001': 'utf-8' };
+
+        return new Promise((resolve, reject) => {
+            pr.exec('chcp', (chcpErr, _stdout) => {
+                if (chcpErr) return reject(chcpErr);
+
+                const page = _stdout.replace(/[^0-9]/ig, "");
+                const encoding = CODE_PAGE[page];
+
+                pr.exec(`REG QUERY ${keyPath} /v ${valueName}`, { encoding: 'buffer' }, (error, stdout) => {
+                    if (error) return reject(error);
+
+                    const data = encoding === 'utf8'
+                        ? stdout.toString()
+                        : iconv.decode(stdout, "gbk").toString();
+
+                    logger.info(`registry: ${keyPath}\\${valueName}`, data);
+
+                    const match = data.match(/[a-zA-Z]*?:.*/);
+                    resolve(match ? match[0] : null);
+                });
+            });
+        });
+    }
+
+    /**
      * 从注册表中获取微信文档路径
      * @returns {Promise<string|null>}
      */
     #getRegWechatFilePath(){
-        const CODE_PAGE = {
-            '936': 'gbk',
-            '65001': 'utf-8'
-        };
-
-        return new Promise((resolve, reject) => {
-            pr.exec('chcp', function (chcpErr, _stdout, _stderr){
-                if (chcpErr) {
-                    return reject(chcpErr);
-                }
-                const page = _stdout.replace(/[^0-9]/ig, "");
-                let _encoding = CODE_PAGE[page];
-
-                pr.exec("REG QUERY HKEY_CURRENT_USER\\Software\\Tencent\\WeChat /v FileSavePath",{ encoding: 'buffer'}, function(error, stdout, stderr){
-                    if (error) {
-                        return reject(error);
-                    }
-                    let data;
-                    if (_encoding === 'utf8'){
-                        data = stdout.toString();
-                    }else{
-                        data = iconv.decode(stdout, "gbk").toString();
-                    }
-                    logger.info("getRegWechatFilePath", data);
-                    let matches = data.match(/[a-zA-Z]*?:.*/);
-                    if (matches) return resolve(matches[0]);
-                    resolve(null);
-                });
-            });
-        });
+        return this.#queryRegistry(
+            "HKEY_CURRENT_USER\\Software\\Tencent\\WeChat",
+            "FileSavePath"
+        );
     }
 
     /**
@@ -133,36 +139,10 @@ class WechatHelp {
      * @returns {Promise<string|null>}
      */
     #getRegWechatExeFilePath(){
-        const CODE_PAGE = {
-            '936': 'gbk',
-            '65001': 'utf-8'
-        };
-
-        return new Promise((resolve, reject) => {
-            pr.exec('chcp', function (chcpErr, _stdout, _stderr){
-                if (chcpErr) {
-                    return reject(chcpErr);
-                }
-                const page = _stdout.replace(/[^0-9]/ig, "");
-                let _encoding = CODE_PAGE[page];
-
-                pr.exec("REG QUERY HKEY_CURRENT_USER\\Software\\Tencent\\Weixin /v InstallPath",{ encoding: 'buffer'}, function(error, stdout, stderr){
-                    if (error) {
-                        return reject(error);
-                    }
-                    let data;
-                    if (_encoding === 'utf8'){
-                        data = stdout.toString();
-                    }else{
-                        data = iconv.decode(stdout, "gbk").toString();
-                    }
-                    logger.info("getRegWechatExeFilePath", data);
-                    let matches = data.match(/[a-zA-Z]*?:.*/);
-                    if (matches) return resolve(matches[0]);
-                    resolve(null);
-                });
-            });
-        });
+        return this.#queryRegistry(
+            "HKEY_CURRENT_USER\\Software\\Tencent\\Weixin",
+            "InstallPath"
+        );
     }
 
     /**
