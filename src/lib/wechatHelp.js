@@ -283,37 +283,6 @@ class WechatHelp {
             await new Promise(r => setTimeout(r, 1000));
         }
 
-        /**
-         * 安全地删除文件并等待文件句柄释放（Windows 兼容）
-         */
-        async function safeRemove(filePath) {
-            if (fs.existsSync(filePath)) {
-                fs.rmSync(filePath, { force: true });
-                // 等待文件系统完全释放句柄
-                for (let i = 0; i < 10; i++) {
-                    await new Promise(r => setTimeout(r, 200));
-                    if (!fs.existsSync(filePath)) break;
-                }
-            }
-        }
-
-        /**
-         * 带重试的 copyFileSync（Windows copyFileSync 偶发 UNKNOWN 错误）
-         */
-        function retryCopyFileSync(src, dest, retries = 5) {
-            for (let i = 0; i < retries; i++) {
-                try {
-                    fs.copyFileSync(src, dest);
-                    return;
-                } catch (e) {
-                    if (i === retries - 1) throw e;
-                    // 同步等待（copyFileSync 是同步的）
-                    const start = Date.now();
-                    while (Date.now() - start < 300) {}
-                }
-            }
-        }
-
         if (itemData){
             // 切换到指定账号
             if (!fs.existsSync(itemData.path)){
@@ -324,18 +293,18 @@ class WechatHelp {
             const crcPath = path.join(wechatFilePath, "all_users", "config", "global_config.crc");
 
             try {
-                await safeRemove(configPath);
-                await safeRemove(crcPath);
-                retryCopyFileSync(path.join(itemData.path, "global_config"), configPath);
-                retryCopyFileSync(path.join(itemData.path, "global_config.crc"), crcPath);
+                fs.rmSync(configPath, { force: true });
+                fs.rmSync(crcPath, { force: true });
+                fs.copyFileSync(path.join(itemData.path, "global_config"), configPath);
+                fs.copyFileSync(path.join(itemData.path, "global_config.crc"), crcPath);
             } catch (e) {
                 logger.error("复制 global_config 失败", e?.message);
                 throw new Error("无法替换 global_config 文件: " + e.message);
             }
         }else{
             // 新建多开：删除配置让微信以新身份启动
-            await safeRemove(path.join(wechatFilePath, "all_users", "config", "global_config"));
-            await safeRemove(path.join(wechatFilePath, "all_users", "config", "global_config.crc"));
+            fs.rmSync(path.join(wechatFilePath, "all_users", "config", "global_config"), { force: true });
+            fs.rmSync(path.join(wechatFilePath, "all_users", "config", "global_config.crc"), { force: true });
         }
 
         logger.info("startWx");
