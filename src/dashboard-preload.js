@@ -52,25 +52,42 @@ const HANDLE_EXE_PATH = path.join(basePath, 'handle.exe');
 const HANDLE_ZIP_PATH = path.join(basePath, 'Handle.zip');
 const HANDLE_ZIP_URL = 'https://download.sysinternals.com/files/Handle.zip';
 
-function downloadHandle() {
+function downloadHandle(onProgress) {
   return new Promise((resolve, reject) => {
-    if (fs.existsSync(HANDLE_EXE_PATH)) return resolve('已存在');
+    if (fs.existsSync(HANDLE_EXE_PATH)) {
+      if (onProgress) onProgress(100);
+      return resolve('已存在');
+    }
     fetch(HANDLE_ZIP_URL)
       .then(res => {
         if (res.status !== 200) throw new Error('下载失败');
-        const file = fs.createWriteStream(HANDLE_ZIP_PATH);
-        res.body.pipe(file);
-        file.on('finish', () => {
-          file.close(() => {
-            try {
-              const zip = new AdmZip(HANDLE_ZIP_PATH);
-              zip.extractAllTo(basePath, true);
-              fs.unlinkSync(HANDLE_ZIP_PATH);
-              resolve('下载成功');
-            } catch (err) {
-              reject('解压失败: ' + err.message);
-            }
-          });
+        const total = parseInt(res.headers.get('content-length') || '0', 10);
+        let downloaded = 0;
+        const chunks = [];
+
+        res.body.on('data', (chunk) => {
+          chunks.push(chunk);
+          downloaded += chunk.length;
+          if (total > 0 && onProgress) {
+            onProgress(Math.round((downloaded / total) * 100));
+          }
+        });
+
+        res.body.on('end', () => {
+          try {
+            fs.writeFileSync(HANDLE_ZIP_PATH, Buffer.concat(chunks));
+            const zip = new AdmZip(HANDLE_ZIP_PATH);
+            zip.extractAllTo(basePath, true);
+            fs.unlinkSync(HANDLE_ZIP_PATH);
+            if (onProgress) onProgress(100);
+            resolve('下载成功');
+          } catch (err) {
+            reject('解压失败: ' + err.message);
+          }
+        });
+
+        res.body.on('error', (err) => {
+          reject('下载失败: ' + err.message);
         });
       })
       .catch(err => reject('下载失败: ' + err.message));
@@ -156,8 +173,11 @@ window.getConfigStatus = async () => {
 };
 
 window.rpcDownloadHandle = async () => {
-  await downloadHandle();
-  return { success: true };
+  return new Promise((resolve, reject) => {
+    downloadHandle((pct) => {
+      if (window.onDownloadProgress) window.onDownloadProgress(pct);
+    }).then(resolve).catch(reject);
+  });
 };
 
 window.getWechatList = async () => {
