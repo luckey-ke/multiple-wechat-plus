@@ -332,21 +332,6 @@ class WechatHelp {
                 logger.error("复制 global_config 失败", e?.message);
                 throw new Error("无法替换 global_config 文件: " + e.message);
             }
-
-            // ★ 关键修复：还原该账号的 login 目录，确保 device_id 和会话匹配
-            const loginBackupDir = path.join(itemData.path, "login_backup");
-            const loginDir = path.join(wechatFilePath, "all_users", "login");
-            if (fs.existsSync(loginBackupDir)) {
-                // 清空 login 目录，只保留目标账号的会话
-                if (fs.existsSync(loginDir)) {
-                    fs.rmSync(loginDir, { recursive: true, force: true });
-                    await new Promise(r => setTimeout(r, 300));
-                }
-                fs.mkdirSync(loginDir, { recursive: true });
-                // 将备份的 login 内容还原到 login/ 目录下
-                this.#copyDirSync(loginBackupDir, path.join(loginDir, itemData.id));
-                logger.info("已还原 login 目录", loginBackupDir, "→", path.join(loginDir, itemData.id));
-            }
         }else{
             // 新建多开：删除配置让微信以新身份启动
             await safeRemove(path.join(wechatFilePath, "all_users", "config", "global_config"));
@@ -391,27 +376,6 @@ class WechatHelp {
     }
 
     /**
-     * 递归复制目录
-     * @param {string} src
-     * @param {string} dest
-     */
-    #copyDirSync(src, dest) {
-        if (!fs.existsSync(dest)) {
-            fs.mkdirSync(dest, { recursive: true });
-        }
-        const entries = fs.readdirSync(src, { withFileTypes: true });
-        for (const entry of entries) {
-            const srcPath = path.join(src, entry.name);
-            const destPath = path.join(dest, entry.name);
-            if (entry.isDirectory()) {
-                this.#copyDirSync(srcPath, destPath);
-            } else {
-                fs.copyFileSync(srcPath, destPath);
-            }
-        }
-    }
-
-    /**
      * 保存当前登录的微信数据
      * @returns {Promise<object>}
      */
@@ -448,17 +412,6 @@ class WechatHelp {
             path.join(wechatFilePath, "all_users", "config", "global_config.crc"),
             path.join(wxidPath, "global_config.crc")
         );
-
-        // ★ 关键修复：备份当前账号的 login 目录，切换时才能还原
-        const loginSrcDir = path.join(loginPath, wxid);
-        const loginBackupDir = path.join(wxidPath, "login_backup");
-        if (fs.existsSync(loginSrcDir)) {
-            if (fs.existsSync(loginBackupDir)) {
-                fs.rmSync(loginBackupDir, { recursive: true, force: true });
-            }
-            this.#copyDirSync(loginSrcDir, loginBackupDir);
-            logger.info("已备份 login 目录", loginSrcDir, "→", loginBackupDir);
-        }
 
         const lastImgPath = findLatestFileAll(path.join(wechatFilePath, "all_users", "head_imgs", "0"));
         if (lastImgPath){
