@@ -63,14 +63,6 @@ class WechatHelp {
     }
 
     /**
-     * 获取微信文档路径（公开方法）
-     * @returns {Promise<string>}
-     */
-    async getDocPath() {
-        return await this.#getWechatDocumentPath();
-    }
-
-    /**
      * 检查配置是否就绪
      * @returns {{ ready: boolean, handleInstalled: boolean, pathSet: boolean }}
      */
@@ -166,52 +158,6 @@ class WechatHelp {
     }
 
     /**
-     * 获取账号排序顺序
-     * @returns {string[]}
-     */
-    getAccountSortOrder(){
-        try {
-            const order = window.dbDevice.getItem("accountSortOrder");
-            if (order && Array.isArray(order)) return order;
-        } catch(e) {}
-        return [];
-    }
-
-    /**
-     * 保存账号排序顺序
-     * @param {string[]} order - wxid 数组
-     */
-    saveAccountSortOrder(order){
-        window.dbDevice.setItem("accountSortOrder", order);
-    }
-
-    /**
-     * 上移账号
-     * @param {string} wxid
-     */
-    moveAccountUp(wxid){
-        const order = this.getAccountSortOrder();
-        const idx = order.indexOf(wxid);
-        if (idx > 0) {
-            [order[idx - 1], order[idx]] = [order[idx], order[idx - 1]];
-            this.saveAccountSortOrder(order);
-        }
-    }
-
-    /**
-     * 下移账号
-     * @param {string} wxid
-     */
-    moveAccountDown(wxid){
-        const order = this.getAccountSortOrder();
-        const idx = order.indexOf(wxid);
-        if (idx >= 0 && idx < order.length - 1) {
-            [order[idx], order[idx + 1]] = [order[idx + 1], order[idx]];
-            this.saveAccountSortOrder(order);
-        }
-    }
-
-    /**
      * 获取已保存的微信账号列表
      * @returns {Promise<Array>}
      */
@@ -246,22 +192,6 @@ class WechatHelp {
                 isLogin: wxidRealPath ? this.isAccountLoggedIn(wxidRealPath) : false
             });
         }
-
-        // 按保存的排序顺序排列
-        const sortOrder = this.getAccountSortOrder();
-        if (sortOrder.length > 0) {
-            const orderMap = {};
-            sortOrder.forEach((id, i) => orderMap[id] = i);
-            wxList.sort((a, b) => {
-                const ia = orderMap[a.id];
-                const ib = orderMap[b.id];
-                if (ia !== undefined && ib !== undefined) return ia - ib;
-                if (ia !== undefined) return -1;
-                if (ib !== undefined) return 1;
-                return 0;
-            });
-        }
-
         return wxList;
     }
 
@@ -353,10 +283,6 @@ class WechatHelp {
             throw new Error("微信账号信息不存在");
         }
         fs.rmSync(itemData.path, {recursive: true, force: true});
-
-        // 从排序中移除
-        const order = this.getAccountSortOrder().filter(id => id !== itemData.id);
-        this.saveAccountSortOrder(order);
     }
 
     /**
@@ -416,13 +342,6 @@ class WechatHelp {
 
         // 记录本次登录的微信账号信息
         window.dbDevice.setItem("wx_" + wxData.id, JSON.stringify(wxData));
-
-        // 新账号加入排序末尾
-        const order = this.getAccountSortOrder();
-        if (!order.includes(wxData.id)) {
-            order.push(wxData.id);
-            this.saveAccountSortOrder(order);
-        }
 
         return wxData;
     }
