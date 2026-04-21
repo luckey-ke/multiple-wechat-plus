@@ -6,12 +6,9 @@ const { GoConfigError } = require('./lib/error');
 const fs = require('fs');
 const path = require('path');
 
-// ========== RPC 函数：供 index.html 调用 ==========
+// ========== 后端逻辑函数（非 window，仅内部使用） ==========
 
-/**
- * 获取配置状态（handle.exe + 微信路径）
- */
-window.getConfigStatus = async () => {
+async function _getConfigStatus() {
   const handleExists = fs.existsSync(HANDLE_EXE_PATH);
   let handleDate = null;
   if (handleExists) {
@@ -29,107 +26,152 @@ window.getConfigStatus = async () => {
     handle: { installed: handleExists, date: handleDate, path: HANDLE_EXE_PATH },
     wechatPath: filePath
   };
-};
+}
 
-/**
- * 下载 handle.exe
- */
-window.rpcDownloadHandle = async () => {
+async function _rpcDownloadHandle() {
   await downloadHandle();
   return { success: true };
-};
+}
 
-/**
- * 获取微信账号列表
- */
-window.getWechatList = async () => {
+async function _getWechatList() {
   try {
     return await wechatHelp.getLocalWechatAccountList();
   } catch (e) {
-    if (e instanceof GoConfigError) {
-      throw new Error('请先完成配置: ' + e.message);
-    }
+    if (e instanceof GoConfigError) throw new Error('请先完成配置: ' + e.message);
     throw e;
   }
-};
+}
 
-/**
- * 启动微信（指定账号或新建多开）
- */
-window.startWechat = async (itemData) => {
+async function _startWechat(itemData) {
   try {
     await wechatHelp.startWx(itemData);
   } catch (e) {
-    if (e instanceof GoConfigError) {
-      throw new Error('请先完成配置: ' + e.message);
-    }
+    if (e instanceof GoConfigError) throw new Error('请先完成配置: ' + e.message);
     throw e;
   }
-};
+}
 
-/**
- * 保存当前登录的微信
- */
-window.saveWechat = async () => {
+async function _saveWechat() {
   try {
     return await wechatHelp.saveWxData();
   } catch (e) {
-    if (e instanceof GoConfigError) {
-      throw new Error('请先完成配置: ' + e.message);
-    }
+    if (e instanceof GoConfigError) throw new Error('请先完成配置: ' + e.message);
     throw e;
   }
-};
+}
 
-/**
- * 删除微信账号
- */
-window.deleteWechat = (itemData) => {
+function _deleteWechat(itemData) {
   wechatHelp.deleteWechat(itemData);
-};
+}
 
-/**
- * 保存微信文档路径
- */
-window.saveFilePath = (p) => {
-  wechatHelp.saveWechatFilePath(p);
-};
-
-/**
- * 用系统文件管理器打开文件夹
- */
-window.openFolder = (folderPath) => {
+function _openFolder(folderPath) {
   utools.shellOpenPath(folderPath);
-};
+}
 
-/**
- * 获取账号排序
- */
-window.getAccountOrder = () => {
+function _getAccountOrder() {
   return window.dbDevice.getItem('accountOrder') || [];
-};
+}
 
-/**
- * 保存账号排序
- */
-window.saveAccountOrder = (order) => {
+function _saveAccountOrder(order) {
   window.dbDevice.setItem('accountOrder', order);
-};
+}
+
+// ========== 仪表盘窗口 ==========
+
+let dashboardWin = null;
+
+function openDashboard() {
+  // 如果窗口已存在，聚焦并刷新
+  if (dashboardWin) {
+    try {
+      dashboardWin.show();
+      dashboardWin.webContents.executeJavaScript('loadDashboard && loadDashboard()');
+      return;
+    } catch (e) {
+      dashboardWin = null;
+    }
+  }
+
+  dashboardWin = utools.createBrowserWindow('index.html', {
+    width: 720,
+    height: 640,
+    minHeight: 400,
+    minWidth: 500,
+    title: '微信多开仪表盘',
+    resizable: true,
+    alwaysOnTop: false,
+    frame: true,
+  }, () => {
+    // 窗口加载完成，注入 RPC 桥接
+    const bridge = `
+      window._rpc = {
+        getConfigStatus: async () => {
+          return new Promise((resolve, reject) => {
+            try {
+              const result = require('electron').ipcRenderer;
+              // 回退: 直接通过 postMessage 与主窗口通信
+            } catch(e) {}
+          });
+        }
+      };
+    `;
+  });
+
+  // 监听窗口关闭
+  dashboardWin.on('closed', () => {
+    dashboardWin = null;
+  });
+
+  // 向子窗口注入 RPC 函数（通过 webContents.executeJavaScript）
+  // 但由于同源策略，preload 中的 require 在子窗口不可用
+  // 解决方案：通过 IPC 让子窗口调用主窗口的函数
+  const { ipcMain } = require('electron');
+
+  // 注册 IPC 处理（幂等）
+  if (!ipcMain._dashboardRegistered) {
+    ipcMain._dashboardRegistered = true;
+
+    ipcMain.handle('dashboard:getConfigStatus', async () => _getConfigStatus());
+    ipcMain.handle('dashboard:downloadHandle', async () => _rpcDownloadHandle());
+    ipcMain.handle('dashboard:getWechatList', async () => _getWechatList());
+    ipcMain.handle('dashboard:startWechat', async (_e, itemData) => _startWechat(itemData));
+    ipcMain.handle('dashboard:saveWechat', async () => _saveWechat());
+    ipcMain.handle('dashboard:deleteWechat', (_e, itemData) => _deleteWechat(itemData));
+    ipcMain.handle('dashboard:openFolder', (_e, p) => _openFolder(p));
+    ipcMain.handle('dashboard:saveAccountOrder', (_e, order) => _saveAccountOrder(order));
+  }
+
+  // 注入 renderer 端 bridge（在页面加载后执行）
+  dashboardWin.webContents.once('did-finish-load', () => {
+    dashboardWin.webContents.executeJavaScript(`
+      const { ipcRenderer } = require('electron');
+      window.getConfigStatus = () => ipcRenderer.invoke('dashboard:getConfigStatus');
+      window.rpcDownloadHandle = () => ipcRenderer.invoke('dashboard:downloadHandle');
+      window.getWechatList = () => ipcRenderer.invoke('dashboard:getWechatList');
+      window.startWechat = (d) => ipcRenderer.invoke('dashboard:startWechat', d);
+      window.saveWechat = () => ipcRenderer.invoke('dashboard:saveWechat');
+      window.deleteWechat = (d) => ipcRenderer.invoke('dashboard:deleteWechat', d);
+      window.openFolder = (p) => ipcRenderer.invoke('dashboard:openFolder', p);
+      window.saveAccountOrder = (o) => ipcRenderer.invoke('dashboard:saveAccountOrder', o);
+      // 通知页面 bridge 就绪
+      window.dispatchEvent(new Event('dashboard-ready'));
+    `);
+  });
+}
 
 // ========== uTools 入口 ==========
 
 window.exports = {
-  // 主仪表盘入口（所有触发词统一指向这里）
   dashboard: {
-    mode: 'docs',
+    mode: 'none',
     args: {
       enter: () => {
-        // docs 模式自动加载 index.html
+        utools.hideMainWindow();
+        openDashboard();
       }
     }
   },
 
-  // 文件夹拖入设置路径（uTools files 类型必须独立，无法合并）
   wechat_file_path: {
     mode: 'none',
     args: {
