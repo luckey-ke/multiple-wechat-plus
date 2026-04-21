@@ -4,7 +4,6 @@ const { wechatHelp } = require('./lib/wechatHelp');
 const { downloadHandle, HANDLE_EXE_PATH } = require('./lib/kill');
 const { GoConfigError } = require('./lib/error');
 const fs = require('node:fs');
-const path = require('path');
 
 // ========== UI API（暴露给 index.html 调用） ==========
 
@@ -69,60 +68,16 @@ window.wechatAPI = {
     }
 };
 
-// ========== 加载自定义 HTML 仪表盘 ==========
-
-function loadDashboard() {
-    const htmlPath = path.join(__dirname, 'index.html');
-    const html = fs.readFileSync(htmlPath, 'utf-8');
-
-    // 从 HTML 中提取 <style> 和 <body> 内容
-    const styleMatch = html.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
-    const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
-    const scriptMatches = [...html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/gi)];
-
-    // 注入样式
-    if (styleMatch) {
-        const style = document.createElement('style');
-        style.textContent = styleMatch[1];
-        document.head.appendChild(style);
-    }
-
-    // 注入 body 内容
-    if (bodyMatch) {
-        document.body.innerHTML = bodyMatch[1];
-    }
-
-    // 执行内联脚本（跳过含 require 的，它们已在 preload 中加载）
-    scriptMatches.forEach(m => {
-        const content = m[1];
-        if (content.includes('const API = window.wechatAPI') || !content.includes('require')) {
-            try {
-                const script = document.createElement('script');
-                script.textContent = content;
-                document.body.appendChild(script);
-            } catch (e) {
-                console.error('Script execution error:', e);
-            }
-        }
-    });
-}
-
 // ========== 插件入口 ==========
 
 window.exports = {
     wechat_plus: {
-        mode: 'list',
+        mode: 'docview',
         args: {
             enter: (action) => {
                 window._pluginAction = action;
-                if (window.utools && utools.whole) {
-                    utools.whole.setExpendHeight(420);
-                }
-                loadDashboard();
             }
-        },
-        list: () => [],
-        select: () => {}
+        }
     },
     wechat_file_path: {
         mode: 'none',
