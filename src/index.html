@@ -379,6 +379,7 @@
         <div class="card-value" id="handleStatus">
           <span class="loading" style="padding:0;font-size:12px"></span>
         </div>
+        <div class="card-path" id="handlePath"></div>
         <div class="progress-wrap" id="handleProgress"><div class="progress-bar" id="handleProgressBar"></div></div>
         <div class="progress-text" id="handleProgressText"></div>
         <div class="card-actions" id="handleActions"></div>
@@ -481,12 +482,15 @@
   function renderConfig(status) {
     // handle.exe
     const hStatus = document.getElementById('handleStatus');
+    const hPath = document.getElementById('handlePath');
     const hActions = document.getElementById('handleActions');
     if (status.handle.installed) {
       hStatus.innerHTML = `<span class="badge badge-ok">✓ 已安装</span>`;
+      hPath.textContent = status.handle.path;
       hActions.innerHTML = `<button class="btn btn-ghost btn-sm" onclick="handleOpenHandle()">📂 打开</button> <button class="btn btn-ghost btn-sm" onclick="handleDownload()">重新下载</button>`;
     } else {
       hStatus.innerHTML = `<span class="badge badge-warn">✕ 未安装</span>`;
+      hPath.textContent = '';
       hActions.innerHTML = `<button class="btn btn-primary btn-sm" onclick="handleDownload()">下载 handle.exe</button>`;
     }
 
@@ -497,7 +501,7 @@
     if (status.wechatPath) {
       pStatus.innerHTML = `<span class="badge badge-ok">✓ 已设置</span>`;
       pText.textContent = status.wechatPath;
-      pActions.innerHTML = `<button class="btn btn-ghost btn-sm" onclick="handleOpenFolder()">打开文件夹</button> <button class="btn btn-primary btn-sm" onclick="handleSetPath()">设置文件夹</button>`;
+      pActions.innerHTML = `<button class="btn btn-ghost btn-sm" onclick="handleOpenFolder()">📂 打开</button> <button class="btn btn-ghost btn-sm" onclick="handleSetPath()">设置</button>`;
     } else {
       pStatus.innerHTML = `<span class="badge badge-warn">✕ 未设置</span>`;
       pText.textContent = '';
