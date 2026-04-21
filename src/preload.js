@@ -1,9 +1,10 @@
 require('./lib/utoolsHelp');
 
 const {wechatHelp} = require('./lib/wechatHelp');
-const {downloadHandle, HANDLE_EXE_PATH} = require("./lib/kill");
+const {downloadHandle, HANDLE_EXE_PATH, releaseMutex, killWeixinProcess, isWeixinRunning} = require("./lib/kill");
 const {GoConfigError} = require("./lib/error");
 const fs = require("node:fs");
+const path = require("node:path");
 
 // ========== 工具函数 ==========
 
@@ -22,25 +23,50 @@ function fileToBase64(filePath) {
 
 // ========== 数据构建 ==========
 
+/**
+ * 构建账号列表，每个账号后面跟排序控制项
+ */
 async function buildAccountList() {
     const localList = await wechatHelp.getLocalWechatAccountList();
     const list = [];
-    for (const data of localList) {
+    const total = localList.length;
+
+    for (let i = 0; i < total; i++) {
+        const data = localList[i];
+        const statusIcon = data.isLogin ? '🟢' : '⚪';
+
+        // 账号卡片
         list.push({
-            title: data.name + (data.isLogin ? ' - [在线]' : ' - [离线]'),
-            description: data.id,
+            title: data.name,
+            description: `${statusIcon} ${data.isLogin ? '在线' : '离线'}  |  ${data.id}`,
             icon: await fileToBase64(data.logo),
             id: data.id,
             type: 'account',
             path: data.path,
             accountPath: data.accountPath
         });
+
+        // 排序控制：上移 / 下移
+        list.push({
+            title: `${i > 0 ? '  ⬆️ 上移' : ''}${i > 0 && i < total - 1 ? '   ' : ''}${i < total - 1 ? '⬇️ 下移' : ''}`,
+            description: `调整「${data.name}」的位置${i > 0 ? ' (Alt+' + (list.length + 1) + ')' : ''}${i < total - 1 ? ' (Alt+' + (list.length + 2) + ')' : ''}`,
+            icon: './logo.png',
+            type: 'reorder',
+            action: 'both',       // 标记同时有上移和下移
+            targetId: data.id,
+            canMoveUp: i > 0,
+            canMoveDown: i < total - 1
+        });
     }
+
     return list;
 }
 
+/**
+ * 构建主界面列表（快捷操作 + 账号列表）
+ */
 function buildMainList(accountList) {
-    return [
+    const items = [
         {
             title: '➕ 新建多开',
             description: '启动新微信，登录后点击"保存当前"保存',
@@ -59,16 +85,32 @@ function buildMainList(accountList) {
             icon: './logo.png',
             type: 'refresh'
         },
-        {
-            title: '⚙️ 配置中心',
-            description: '下载 handle.exe、设置微信文档路径等',
-            icon: './logo.png',
-            type: 'config'
-        },
-        ...accountList
     ];
+
+    // 有多个账号时才显示一键启动
+    const accountCount = accountList.filter(i => i.type === 'account').length;
+    if (accountCount >= 2) {
+        items.push({
+            title: '🚀 一键启动全部',
+            description: `依次启动全部 ${accountCount} 个账号，每次启动后等待你登录`,
+            icon: './logo.png',
+            type: 'startAll'
+        });
+    }
+
+    items.push({
+        title: '⚙️ 配置中心',
+        description: '下载 handle.exe、设置微信文档路径等',
+        icon: './logo.png',
+        type: 'config'
+    });
+
+    return [...items, ...accountList];
 }
 
+/**
+ * 构建配置中心列表
+ */
 function buildConfigList(status) {
     const items = [
         {
@@ -113,12 +155,26 @@ function buildConfigList(status) {
     return items;
 }
 
+/**
+ * 列表搜索过滤
+ */
 function filterList(list, keyword) {
     if (!keyword) return list;
+    const kw = keyword.toLowerCase();
     return list.filter(item =>
-        item.title.toLowerCase().includes(keyword.toLowerCase()) ||
-        (item.description && item.description.toLowerCase().includes(keyword.toLowerCase()))
+        item.title.toLowerCase().includes(kw) ||
+        (item.description && item.description.toLowerCase().includes(kw))
     );
+}
+
+/**
+ * 刷新主列表并保持排序顺序
+ */
+async function refreshMainList(data) {
+    const accountList = await buildAccountList();
+    data.accountList = accountList;
+    data.mainList = buildMainList(accountList);
+    return data.mainList;
 }
 
 // ========== 操作处理 ==========
@@ -224,6 +280,145 @@ function handleSetPath() {
     utools.outPlugin();
 }
 
+/**
+ * 处理排序操作
+ * 点击 reorder 项时，根据点击位置判断是上移还是下移
+ */
+function handleReorder(itemData) {
+    const targetId = itemData.targetId;
+    if (!targetId) return;
+
+    // 弹出选择：上移 / 下移
+    const options = [];
+    if (itemData.canMoveUp) options.push('⬆️ 上移');
+    if (itemData.canMoveDown) options.push('⬇️ 下移');
+    if (options.length === 0) return;
+
+    if (options.length === 1) {
+        // 只有一个选项，直接执行
+        if (itemData.canMoveUp) {
+            wechatHelp.moveAccountUp(targetId);
+        } else {
+            wechatHelp.moveAccountDown(targetId);
+        }
+        return;
+    }
+
+    // 两个选项，弹窗选择
+    const result = utools.showMessageBox({
+        type: 'question',
+        title: '调整位置',
+        message: '请选择操作：',
+        buttons: [...options, '取消']
+    });
+
+    if (result === 0 && itemData.canMoveUp) {
+        wechatHelp.moveAccountUp(targetId);
+    } else if ((result === 0 && !itemData.canMoveUp) || result === 1) {
+        // canMoveUp 为 false 时，result=0 就是下移
+        if (itemData.canMoveDown) {
+            wechatHelp.moveAccountDown(targetId);
+        }
+    }
+    // result === options.length → 取消
+}
+
+/**
+ * 一键启动全部账号
+ * 按排序顺序依次启动，每次启动前等待用户确认
+ */
+async function handleStartAll() {
+    const accountList = await wechatHelp.getLocalWechatAccountList();
+    if (accountList.length === 0) {
+        utools.showNotification("没有已保存的账号");
+        return;
+    }
+
+    const total = accountList.length;
+    const result = utools.showMessageBox({
+        type: 'info',
+        title: '一键启动',
+        message: `即将依次启动全部 ${total} 个账号。\n\n每次启动后请完成登录，然后点击"继续"启动下一个。\n\n注意：每个账号启动前会关闭当前运行的微信。`,
+        buttons: ['取消', '开始']
+    });
+
+    if (result !== 1) return;
+
+    utools.hideMainWindow();
+
+    try {
+        // 获取微信EXE路径（只查一次）
+        const {execSync} = require('child_process');
+        let binPath;
+        try {
+            const raw = execSync('REG QUERY HKEY_CURRENT_USER\\Software\\Tencent\\Weixin /v InstallPath', { encoding: 'utf8' });
+            const match = raw.match(/[a-zA-Z]*?:.*/);
+            if (match) binPath = path.join(match[0], 'Weixin.exe');
+        } catch(e) {}
+
+        if (!binPath || !fs.existsSync(binPath)) {
+            utools.showNotification("获取微信EXE路径失败");
+            utools.outPlugin();
+            return;
+        }
+
+        for (let i = 0; i < total; i++) {
+            const account = accountList[i];
+
+            // 杀掉正在运行的微信
+            if (await isWeixinRunning()) {
+                await killWeixinProcess();
+                await new Promise(r => setTimeout(r, 1500));
+            }
+
+            // 复制账号配置
+            const configDir = path.join(await wechatHelp.getDocPath(), "all_users", "config");
+            const configPath = path.join(configDir, "global_config");
+            const crcPath = path.join(configDir, "global_config.crc");
+
+            try {
+                fs.rmSync(configPath, { force: true });
+                fs.rmSync(crcPath, { force: true });
+                fs.copyFileSync(path.join(account.path, "global_config"), configPath);
+                fs.copyFileSync(path.join(account.path, "global_config.crc"), crcPath);
+            } catch(e) {
+                logger.error("复制配置失败", e);
+                utools.showNotification(`账号 ${account.id} 配置复制失败：${e.message}`);
+                continue;
+            }
+
+            // 释放互斥体
+            try { await releaseMutex(); } catch(e) { logger.error("释放互斥体失败", e); }
+
+            // 启动微信
+            utools.shellOpenPath(binPath);
+
+            // 最后一个账号不弹确认
+            if (i < total - 1) {
+                const cont = utools.showMessageBox({
+                    type: 'info',
+                    title: `账号 ${i + 1}/${total}`,
+                    message: `「${account.id}」已启动。\n\n请在微信中完成操作后，点击"继续"启动下一个账号。`,
+                    buttons: ['结束', '继续启动下一个']
+                });
+
+                if (cont !== 1) {
+                    utools.showNotification(`已启动 ${i + 1} 个账号`);
+                    utools.outPlugin();
+                    return;
+                }
+            }
+        }
+
+        utools.showNotification(`全部 ${total} 个账号已启动完毕！`);
+    } catch (e) {
+        logger.error("一键启动失败", e);
+        utools.showNotification("一键启动失败：" + e.message);
+    }
+
+    utools.outPlugin();
+}
+
 // ========== 主入口 ==========
 
 window.exports = {
@@ -233,7 +428,6 @@ window.exports = {
             enter: async (action, callbackSetList) => {
                 try {
                     const accountList = await buildAccountList();
-                    // 保存全部数据用于搜索
                     window._wechatPlusData = {
                         mainList: buildMainList(accountList),
                         accountList: accountList,
@@ -244,7 +438,6 @@ window.exports = {
                     logger.error("初始化失败", e);
                     utools.showNotification("加载失败：" + e.message);
                     if (e instanceof GoConfigError) {
-                        // 配置未就绪，直接进入配置中心
                         const status = wechatHelp.getConfigStatus();
                         window._wechatPlusData = {
                             mainList: [],
@@ -291,11 +484,21 @@ window.exports = {
                 }
 
                 if (type === 'refresh') {
-                    const accountList = await buildAccountList();
-                    data.accountList = accountList;
-                    data.mainList = buildMainList(accountList);
-                    callbackSetList(data.mainList);
+                    callbackSetList(await refreshMainList(data));
                     utools.showNotification("状态已刷新");
+                    return;
+                }
+
+                if (type === 'startAll') {
+                    await handleStartAll();
+                    return;
+                }
+
+                // ===== 排序控制 =====
+
+                if (type === 'reorder') {
+                    handleReorder(itemData);
+                    callbackSetList(await refreshMainList(data));
                     return;
                 }
 
@@ -329,17 +532,11 @@ window.exports = {
                     return;
                 }
 
-                // ===== 账号右键菜单（由 uTools list 右键触发） =====
+                // ===== 账号操作 =====
 
                 if (type === 'delete') {
                     handleDeleteAccount(itemData);
-                    // 刷新列表
-                    const accountList = await buildAccountList();
-                    data.accountList = accountList;
-                    data.mainList = buildMainList(accountList);
-                    if (data.state === 'main') {
-                        callbackSetList(data.mainList);
-                    }
+                    callbackSetList(await refreshMainList(data));
                     return;
                 }
             },
