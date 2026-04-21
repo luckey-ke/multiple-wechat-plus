@@ -249,10 +249,77 @@ window.startWechat = async (itemData) => {
 };
 
 window.saveWechat = async () => {
-  // 需要主窗口的完整 wechatHelp 逻辑，这里简化：通过 IPC 请求主窗口
-  return new Promise((resolve, reject) => {
-    reject(new Error('请在主窗口搜索 wxok 保存登录信息'));
-  });
+  const wechatFilePath = getWechatFilePath();
+  if (!wechatFilePath) throw new Error('请先设置微信文档路径');
+
+  // 查找最新的 key_info.db-shm 目录 → 获取 wxid
+  const loginPath = path.join(wechatFilePath, 'all_users', 'login');
+  if (!fs.existsSync(loginPath)) throw new Error('微信登录目录不存在，请检查是否已登录');
+
+  let latestTime = 0;
+  let latestPath = null;
+  const loginDirs = fs.readdirSync(loginPath);
+  for (const dir of loginDirs) {
+    const dirPath = path.join(loginPath, dir);
+    if (fs.statSync(dirPath).isDirectory()) {
+      const keyInfoPath = path.join(dirPath, 'key_info.db-shm');
+      if (fs.existsSync(keyInfoPath)) {
+        const fileStats = fs.statSync(keyInfoPath);
+        if (fileStats.mtimeMs > latestTime) {
+          latestTime = fileStats.mtimeMs;
+          latestPath = dirPath;
+        }
+      }
+    }
+  }
+  if (!latestPath) throw new Error('未找到 key_info.db 文件，可能未登录微信');
+
+  const wxid = latestPath.split('\\').pop();
+  if (!wxid) throw new Error('获取微信用户 ID 失败');
+
+  // 创建备份目录
+  const wxidPath = path.join(wechatFilePath, 'all_users', 'plugin_save_config', wxid);
+  if (!fs.existsSync(wxidPath)) fs.mkdirSync(wxidPath, { recursive: true });
+
+  // 复制 global_config 和 crc
+  const configSrc = path.join(wechatFilePath, 'all_users', 'config', 'global_config');
+  const crcSrc = configSrc + '.crc';
+  if (!fs.existsSync(configSrc)) throw new Error('global_config 不存在');
+  fs.copyFileSync(configSrc, path.join(wxidPath, 'global_config'));
+  fs.copyFileSync(crcSrc, path.join(wxidPath, 'global_config.crc'));
+
+  // 复制头像
+  const headImgDir = path.join(wechatFilePath, 'all_users', 'head_imgs', '0');
+  if (fs.existsSync(headImgDir)) {
+    let imgLatestTime = 0, imgLatestPath = null;
+    function loopImg(dir) {
+      const items = fs.readdirSync(dir);
+      for (const item of items) {
+        const fullPath = path.join(dir, item);
+        const stat = fs.statSync(fullPath);
+        if (stat.isDirectory()) loopImg(fullPath);
+        else if (stat.isFile() && stat.mtimeMs > imgLatestTime) {
+          imgLatestTime = stat.mtimeMs;
+          imgLatestPath = fullPath;
+        }
+      }
+    }
+    loopImg(headImgDir);
+    if (imgLatestPath) fs.copyFileSync(imgLatestPath, path.join(wxidPath, 'logo.png'));
+  }
+
+  const wxData = {
+    id: wxid,
+    logo: path.join(wxidPath, 'logo.png'),
+    name: wxid,
+    path: wxidPath,
+    isLogin: isAccountLoggedIn(path.join(wechatFilePath, wxid))
+  };
+
+  // 记录到本地存储
+  window.dbDevice.setItem('wx_' + wxData.id, JSON.stringify(wxData));
+
+  return wxData;
 };
 
 window.deleteWechat = (itemData) => {
