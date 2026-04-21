@@ -19,7 +19,7 @@ class WechatHelp {
      */
     async #getWechatDocumentPath() {
         let wechatDocumentPath = this.wechatDocumentPath;
-        if (fs.existsSync(wechatDocumentPath)){
+        if (wechatDocumentPath && fs.existsSync(wechatDocumentPath)){
             return wechatDocumentPath
         }
         // 1. 尝试从数据库中获取记录的微信文档目录路径
@@ -75,14 +75,14 @@ class WechatHelp {
         return new Promise((resolve, reject) => {
             pr.exec('chcp', function (_err, _stdout, _stderr){
                 if (_err) {
-                    reject(_err)
+                    return reject(_err)
                 }
                 const page = _stdout.replace(/[^0-9]/ig, "");
                 let _encoding = CODE_PAGE[page]
 
                 pr.exec("REG QUERY HKEY_CURRENT_USER\\Software\\Tencent\\WeChat /v FileSavePath",{ encoding: 'buffer'},function(error,stdout,stderr){
-                    if (_err) {
-                        reject(_err)
+                    if (error) {
+                        return reject(error)
                     }
                     let data;
                     if (_encoding === 'utf8'){
@@ -92,7 +92,7 @@ class WechatHelp {
                     }
                     logger.info("getRegWechatFilePath",data);
                     let matches = data.match(/[a-zA-Z]*?:.*/)
-                    if (matches) resolve(matches[0]);
+                    if (matches) return resolve(matches[0]);
 
                     resolve(null)
                 });
@@ -102,7 +102,7 @@ class WechatHelp {
     }
 
     #getRegWechatExeFilePath(){
-        // 从注册表中获取微信文档路径
+        // 从注册表中获取微信exe路径
         const CODE_PAGE = {
             '936': 'gbk',
             '65001': 'utf-8'
@@ -111,14 +111,14 @@ class WechatHelp {
         return new Promise((resolve, reject) => {
             pr.exec('chcp', function (_err, _stdout, _stderr){
                 if (_err) {
-                    reject(_err)
+                    return reject(_err)
                 }
                 const page = _stdout.replace(/[^0-9]/ig, "");
                 let _encoding = CODE_PAGE[page]
 
                 pr.exec("REG QUERY HKEY_CURRENT_USER\\Software\\Tencent\\Weixin /v InstallPath",{ encoding: 'buffer'},function(error,stdout,stderr){
-                    if (_err) {
-                        reject(_err)
+                    if (error) {
+                        return reject(error)
                     }
                     let data;
                     if (_encoding === 'utf8'){
@@ -128,7 +128,7 @@ class WechatHelp {
                     }
                     logger.info("getRegWechatExeFilePath",data);
                     let matches = data.match(/[a-zA-Z]*?:.*/)
-                    if (matches) resolve(matches[0]);
+                    if (matches) return resolve(matches[0]);
 
                     resolve(null)
                 });
@@ -279,7 +279,7 @@ class WechatHelp {
         if (!fs.existsSync(itemData.path)){
             throw new Error("微信账号信息不存在");
         }
-        fs.rmdirSync(itemData.path, {recursive: true});
+        fs.rmSync(itemData.path, {recursive: true, force: true});
     }
 
     /**

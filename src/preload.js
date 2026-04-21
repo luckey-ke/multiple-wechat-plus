@@ -1,284 +1,152 @@
-require( './lib/utoolsHelp');
+require('./lib/utoolsHelp');
 
-let {wechatHelp} = require( './lib/wechatHelp');
-const {downloadHandle, HANDLE_EXE_PATH} = require("./lib/kill");
-const {GoConfigError} = require("./lib/error");
-const fs = require("node:fs");
+const { wechatHelp } = require('./lib/wechatHelp');
+const { downloadHandle, HANDLE_EXE_PATH } = require('./lib/kill');
+const { GoConfigError } = require('./lib/error');
+const fs = require('fs');
+const path = require('path');
 
-function fileToBase64(filePath) {
-    return new Promise((resolve, reject) => {
-        if (!fs.existsSync(filePath)){
-            resolve('');
-            return
-        }
-        fs.readFile(filePath, (err, data) => {
-            if (err) {
-                return reject(err);
-            }
-            const base64 = data.toString('base64');
-            resolve('data:image/png;base64,' + base64);
-        });
-    });
-}
+// ========== RPC 函数：供 index.html 调用 ==========
 
-async function buildWechatList() {
-    // 获取记录的微信列表
-    let localWechatList = await wechatHelp.getLocalWechatAccountList()
-    let list = [];
-    for (let data of localWechatList) {
-        list.push({
-            title: data.name  + (data.isLogin ? ' - [在线]': ''),
-            description: data.id,
-            icon: await fileToBase64(data.logo) || './logo.png',
-            id: data.id,
-            path: data.path
-        })
+/**
+ * 获取配置状态（handle.exe + 微信路径）
+ */
+window.getConfigStatus = async () => {
+  const handleExists = fs.existsSync(HANDLE_EXE_PATH);
+  let handleDate = null;
+  if (handleExists) {
+    const stat = fs.statSync(HANDLE_EXE_PATH);
+    handleDate = new Date(stat.mtimeMs).toISOString().slice(0, 10);
+  }
+
+  let filePath = window.dbDevice.getItem('wechatFilePath');
+  const defaultPath = path.join(utools.getPath('documents'), 'xwechat_files');
+  if (!filePath || !fs.existsSync(filePath)) {
+    filePath = fs.existsSync(defaultPath) ? defaultPath : null;
+  }
+
+  return {
+    handle: { installed: handleExists, date: handleDate, path: HANDLE_EXE_PATH },
+    wechatPath: filePath
+  };
+};
+
+/**
+ * 下载 handle.exe
+ */
+window.rpcDownloadHandle = async () => {
+  await downloadHandle();
+  return { success: true };
+};
+
+/**
+ * 获取微信账号列表
+ */
+window.getWechatList = async () => {
+  try {
+    return await wechatHelp.getLocalWechatAccountList();
+  } catch (e) {
+    if (e instanceof GoConfigError) {
+      throw new Error('请先完成配置: ' + e.message);
     }
-    return list;
-}
+    throw e;
+  }
+};
+
+/**
+ * 启动微信（指定账号或新建多开）
+ */
+window.startWechat = async (itemData) => {
+  try {
+    await wechatHelp.startWx(itemData);
+  } catch (e) {
+    if (e instanceof GoConfigError) {
+      throw new Error('请先完成配置: ' + e.message);
+    }
+    throw e;
+  }
+};
+
+/**
+ * 保存当前登录的微信
+ */
+window.saveWechat = async () => {
+  try {
+    return await wechatHelp.saveWxData();
+  } catch (e) {
+    if (e instanceof GoConfigError) {
+      throw new Error('请先完成配置: ' + e.message);
+    }
+    throw e;
+  }
+};
+
+/**
+ * 删除微信账号
+ */
+window.deleteWechat = (itemData) => {
+  wechatHelp.deleteWechat(itemData);
+};
+
+/**
+ * 保存微信文档路径
+ */
+window.saveFilePath = (p) => {
+  wechatHelp.saveWechatFilePath(p);
+};
+
+/**
+ * 用系统文件管理器打开文件夹
+ */
+window.openFolder = (folderPath) => {
+  utools.shellOpenPath(folderPath);
+};
+
+/**
+ * 获取账号排序
+ */
+window.getAccountOrder = () => {
+  return window.dbDevice.getItem('accountOrder') || [];
+};
+
+/**
+ * 保存账号排序
+ */
+window.saveAccountOrder = (order) => {
+  window.dbDevice.setItem('accountOrder', order);
+};
+
+// ========== uTools 入口 ==========
 
 window.exports = {
-    "wechat_list": { // 注意：键对应的是 plugin.json 中的 features.code
-        mode: "list",  // 列表模式
-        args: {
-            // 进入插件应用时调用（可选）
-            enter: async (action, callbackSetList) => {
-                let list = []
-                try{
-                    list = await buildWechatList();
-                }catch (e) {
-                    logger.error("获取列表失败",e)
-                    utools.showNotification("获取列表失败：" + e.message);
-                    if (e instanceof GoConfigError){
-                        utools.redirect('微信多开配置')
-                    }
-                    return
-                }
-                list.unshift({
-                    title: "多开一个微信",
-                    description: "多开一个微信,登录后记得回搜索框输入“wxok”或“多开确认”保存登录信息",
-                    icon: "./logo.png",
-                    id: 0
-                })
-                list.unshift({
-                    title: "鼓励一下",
-                    description: "如果好用的话，麻烦大家帮忙点赞，评论多多支持一下！！！",
-                    icon: "./logo.png",
-                    id: 0
-                })
+  // 主仪表盘入口（所有触发词统一指向这里）
+  dashboard: {
+    mode: 'docs',
+    args: {
+      enter: () => {
+        // docs 模式自动加载 index.html
+      }
+    }
+  },
 
-                logger.info("list", list)
-
-                // 如果进入插件应用就要显示列表数据
-                callbackSetList(list)
-            },
-            // 子输入框内容变化时被调用 可选 (未设置则无搜索)
-            search: async (action, searchWord, callbackSetList) => {
-
-                let list = await buildWechatList();
-
-                list = list.filter(item => item.title.includes(searchWord))
-                list.unshift({
-                    title: "多开一个微信",
-                    description: "多开一个微信,登录后记得回搜索框输入“wxok”或“多开确认”保存登录信息",
-                    icon: "./logo.png",
-                    id: 0
-                })
-                list.unshift({
-                    title: "鼓励一下",
-                    description: "如果好用的话，麻烦大家帮忙点赞，评论多多支持一下！！！",
-                    icon: "./logo.png",
-                    id: 0
-                })
-
-
-                // 执行 callbackSetList 显示出来
-                callbackSetList(list)
-            },
-            // 用户选择列表中某个条目时被调用
-            select: async (action, itemData, callbackSetList) => {
-                utools.hideMainWindow()
-
-                try {
-                    if (itemData.id === 0) itemData = null
-                    await wechatHelp.startWx(itemData);
-
-                } catch (e) {
-                    logger.error("启动微信失败",e)
-                    utools.showNotification("启动失败：" + e.message);
-                    if (e instanceof GoConfigError){
-                        utools.redirect('微信多开配置')
-                    }
-                    return
-                }
-
-                utools.outPlugin()
-            },
-            // 子输入框为空时的占位符，默认为字符串"搜索"
-            placeholder: "搜索"
+  // 文件夹拖入设置路径（uTools files 类型必须独立，无法合并）
+  wechat_file_path: {
+    mode: 'none',
+    args: {
+      enter: ({ payload }) => {
+        utools.hideMainWindow();
+        if (payload && payload.length > 0) {
+          try {
+            wechatHelp.saveWechatFilePath(payload[0].path);
+            utools.showNotification('路径保存成功');
+          } catch (e) {
+            utools.showNotification('保存失败: ' + e.message);
+          }
+        } else {
+          utools.showNotification('未检测到路径');
         }
-    },
-    "wechat_delete_list": { // 注意：键对应的是 plugin.json 中的 features.code
-        mode: "list",  // 列表模式
-        args: {
-            // 进入插件应用时调用（可选）
-            enter: async (action, callbackSetList) => {
-                let list = []
-                try{
-                    list = await buildWechatList();
-                }catch (e) {
-                    logger.error("获取列表失败",e)
-                    utools.showNotification("获取列表失败：" + e.message);
-                    if (e instanceof GoConfigError){
-                        utools.redirect('微信多开配置')
-                    }
-                    return
-                }
-                // 如果进入插件应用就要显示列表数据
-                callbackSetList(list)
-            },
-            // 子输入框内容变化时被调用 可选 (未设置则无搜索)
-            search: async (action, searchWord, callbackSetList) => {
-                // 获取一些数据
-                let list = await buildWechatList();
-                list = list.filter(item => item.name.includes(searchWord))
-
-                // 执行 callbackSetList 显示出来
-                callbackSetList(list)
-            },
-            // 用户选择列表中某个条目时被调用
-            select: async (action, itemData, callbackSetList) => {
-                utools.hideMainWindow()
-                try {
-                    wechatHelp.deleteWechat(itemData)
-                } catch (e) {
-                    utools.showNotification("删除失败：" + e.message);
-                }
-                utools.outPlugin()
-            },
-            // 子输入框为空时的占位符，默认为字符串"搜索"
-            placeholder: "搜索"
-        }
-    },
-    "wechat_start": {
-        mode: "none",
-        args: {
-            // 进入插件应用时调用
-            enter: async (action) => {
-                utools.hideMainWindow()
-
-                logger.log("快开启动微信多开")
-                try {
-                    await wechatHelp.startWx(null);
-                } catch (e) {
-                    logger.error("快开启动失败" , typeof e,e)
-                    utools.showNotification("启动失败：" + e.message);
-                    if (e instanceof GoConfigError){
-                        window.utools.redirect('微信多开配置')
-                    }
-                    return
-                }
-
-                utools.outPlugin();
-            }
-        }
-    },
-    "wechat_save": {
-        mode: "none",
-        args: {
-            // 进入插件应用时调用
-            enter: async (action) => {
-                utools.hideMainWindow()
-                try {
-                    let data = await wechatHelp.saveWxData();
-                    utools.showNotification("保存微信账号成功：" + data.name);
-                } catch (e) {
-                    logger.error("保存微信账号失败",e)
-                    utools.showNotification("保存失败：" + e.message);
-                    if (e instanceof GoConfigError){
-                        utools.redirect('微信多开配置')
-                    }
-                }
-
-                utools.outPlugin();
-            }
-        }
-    },
-    "wechat_file_path": {
-        mode: "none",
-        args: {
-            // 进入插件应用时调用
-            enter: ({ code, type, payload }) => {
-                utools.hideMainWindow()
-
-                if (payload.length > 0){
-
-                    try {
-                        wechatHelp.saveWechatFilePath(payload[0].path);
-                    }catch (e){
-                        utools.showNotification("保存失败：" + e.message);
-                        return
-                    }
-
-                    utools.showNotification("保存成功：" + payload[0].path);
-                }else{
-                    utools.showNotification("保存失败");
-                }
-
-                utools.outPlugin();
-            }
-        }
-    },
-    "config": { // 注意：键对应的是 plugin.json 中的 features.code
-        mode: "list",  // 列表模式
-        args: {
-            // 进入插件应用时调用（可选）
-            enter: async (action, callbackSetList) => {
-                let list = [];
-                list.push({
-                    title: "使用须知",
-                    description: "当前只支持4.0+微信版本，低版本请市场搜索使用blowsnow作者旧版N开插件",
-                    icon: "./logo.png",
-                    id: -1
-                })
-                list.push({
-                    title: "鼓励一下",
-                    description: "如果好用的话，麻烦大家帮忙点赞，评论多多支持一下！！！",
-                    icon: "./logo.png",
-                    id: -2
-                })
-                list.push({
-                    title: "第一步. 下载微软进程处理(handle.exe)软件",
-                    description: "点击即确认同意从互联网下载微软进程处理软件用于执行多开微信",
-                    icon: "./logo.png",
-                    id: 0
-                })
-                list.push({
-                    title: "第二步. 设置微信文档路径(4.0+版本默认是xwechat_files文件夹)",
-                    description: "获取方法：微信-账号与存储-存储位置-更改-复制路径,打开文件夹,拖动xwechat_files文件夹然后粘贴到Utools输入框",
-                    icon: "./logo.png",
-                    id: 1
-                })
-                // 如果进入插件应用就要显示列表数据
-                callbackSetList(list)
-            },
-            // 用户选择列表中某个条目时被调用
-            select: async (action, itemData, callbackSetList) => {
-                utools.hideMainWindow()
-
-                if (itemData.id === 0){
-                    try {
-                        await downloadHandle();
-                        utools.showNotification("下载成功: " + HANDLE_EXE_PATH);
-                    } catch (e) {
-                        utools.showNotification("下载失败：" + e.message);
-                    }
-                }else if (itemData.id === 1){
-                    utools.showNotification("获取方法：微信-账号与存储-存储位置-更改-复制路径,打开文件夹,拖动xwechat_files文件夹然后粘贴到Utools输入框");
-                }
-
-                utools.outPlugin();
-            },
-        }
-    },
-}
+        utools.outPlugin();
+      }
+    }
+  }
+};

@@ -114,30 +114,32 @@ function releaseMutex() {
  */
 function releaseFileLock(filePath) {
     return new Promise((resolve, reject) => {
-        // 使用 handle.exe 查找占用文件的进程和句柄
         exec(`${HANDLE_EXE_PATH} -p weixin "${filePath}"`, (err, stdout, stderr) => {
             if (err) {
                 logger.error(`Error finding file lock: ${stderr || err.message}`)
                 return reject(`Error finding file lock: ${stderr || err.message}`);
             }
 
-            // 解析 handle.exe 的输出，找到占用文件的 PID 和句柄 ID
             const matches = stdout.match(/pid: (\d+)\s+type: (.*?)\s+([a-zA-Z0-9]+):/ig);
             if (!matches) {
                 logger.error('No process or handle found locking the file.')
                 return reject('No process or handle found locking the file.');
             }
+
+            let pending = matches.length;
+            let hasError = false;
             for (const content of matches) {
                 const match = content.match(/pid: (\d+)\s+type: (.*?)\s+([a-zA-Z0-9]+):/i);
                 const [, pid, type, handleId] = match;
                 logger.info(`File is locked by process with PID: ${pid}, Handle ID: ${handleId}`);
-                // 使用 handle.exe 关闭特定的句柄
                 exec(`${HANDLE_EXE_PATH} -c ${handleId} -p ${pid} -y`, (closeErr, closeStdout, closeStderr) => {
-                    if (closeErr) {
+                    if (closeErr && !hasError) {
+                        hasError = true;
                         return reject(`Error releasing file lock: ${closeStderr || closeErr.message}`);
                     }
                     logger.info(`Handle ${handleId} for PID ${pid} released successfully.`);
-                    resolve();
+                    pending--;
+                    if (pending === 0 && !hasError) resolve();
                 });
             }
         });
