@@ -88,6 +88,32 @@ function getWechatFilePath() {
   return filePath;
 }
 
+/**
+ * 校验并保存微信文档路径
+ * @param {string} dirPath 用户选择的目录
+ * @returns {{success: boolean, message: string}}
+ */
+window.setWechatFilePath = (dirPath) => {
+  if (!dirPath || !fs.existsSync(dirPath)) {
+    return { success: false, message: '目录不存在' };
+  }
+
+  // 校验：目录下必须包含 all_users/config/global_config
+  const globalConfig = path.join(dirPath, 'all_users', 'config', 'global_config');
+  const pluginConfig = path.join(dirPath, 'all_users', 'plugin_save_config');
+
+  if (!fs.existsSync(globalConfig) && !fs.existsSync(pluginConfig)) {
+    return {
+      success: false,
+      message: '该目录不是有效的微信文档目录\n缺少 all_users\\config\\global_config\n请选择包含这些文件的 xwechat_files 文件夹'
+    };
+  }
+
+  window.dbDevice.setItem('wechatFilePath', dirPath);
+  logger.info('微信文档路径已更新', dirPath);
+  return { success: true, message: '路径已保存' };
+};
+
 // ========== 文件工具 ==========
 
 function findDirName(findDir, name) {

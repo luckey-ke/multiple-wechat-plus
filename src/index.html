@@ -605,32 +605,14 @@
     if (!result || !result.length) return;
     const selectedPath = result[0];
 
-    // 校验是否是有效的微信文档目录
-    const configDir = selectedPath + '\\all_users\\config\\global_config';
-    const dataDir = selectedPath + '\\all_users\\plugin_save_config';
-    if (!window._fs) {
-      // 在 preload 上下文中，Node.js fs 已可用，这里通过 preload 暴露的接口校验
+    // 通过 preload 中间层校验并保存
+    const ret = window.setWechatFilePath(selectedPath);
+    if (ret.success) {
+      toast('路径已更新 ✓');
+      loadDashboard();
+    } else {
+      toast(ret.message, true, 4000);
     }
-
-    // 通过 preload 中间层校验并保存（dashboard-preload.js 中已有 getWechatFilePath 读取此 key）
-    const device = utools.getNativeId();
-    // 先校验目录结构
-    try {
-      const fs = require('fs');
-      const path = require('path');
-      const globalConfig = path.join(selectedPath, 'all_users', 'config', 'global_config');
-      const pluginConfig = path.join(selectedPath, 'all_users', 'plugin_save_config');
-      if (!fs.existsSync(globalConfig) && !fs.existsSync(pluginConfig)) {
-        toast('该目录不是有效的微信文档目录（缺少 all_users/config 或 all_users/plugin_save_config）', true, 4000);
-        return;
-      }
-    } catch (e) {
-      // 如果不在 preload 上下文中无法访问 fs，跳过校验直接保存
-    }
-
-    utools.dbStorage.setItem('wechatFilePath_' + device, selectedPath);
-    toast('路径已更新 ✓');
-    loadDashboard();
   }
 
   function handleOpenFolder() {
