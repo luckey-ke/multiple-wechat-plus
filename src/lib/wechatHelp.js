@@ -151,13 +151,8 @@ class WechatHelp {
      */
     getAccountSortOrder(){
         try {
-            let order = window.dbDevice.getItem("accountSortOrder");
-            if (!order) return [];
-            // dbStorage 对数组的序列化行为不一致，可能返回字符串
-            if (typeof order === 'string') {
-                try { order = JSON.parse(order); } catch(e) { return []; }
-            }
-            if (Array.isArray(order)) return order;
+            const order = window.dbDevice.getItem("accountSortOrder");
+            if (order && Array.isArray(order)) return order;
         } catch(e) {}
         return [];
     }
@@ -421,7 +416,9 @@ class WechatHelp {
         if (!accountPath) return false;
 
         const msgFolder = path.join(accountPath, 'db_storage', 'message');
+        logger.info(`检查在线状态: ${msgFolder}`);
         if (!fs.existsSync(msgFolder)) {
+            logger.info(`目录不存在，跳过`);
             return false;
         }
 

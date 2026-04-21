@@ -92,29 +92,22 @@ function releaseMutex() {
     return new Promise((resolve, reject) => {
         exec(`"${HANDLE_EXE_PATH}" -accepteula -p weixin -a ${WECHAT_MUTEX_NAME}`, (err, stdout, stderr) => {
             if (err) {
-                logger.info('未找到互斥体（可能没有运行中的微信）')
-                return resolve();
+                logger.error('未能查找到互斥体.', stderr || err.message)
+                return reject('未能查找到互斥体');
             }
 
             const match = stdout.match(/pid: (\d+)\s+type: (.*?)\s+([a-zA-Z0-9]+):/i);
             if (!match) {
-                logger.info('未找到互斥体')
-                return resolve();
+                logger.error('未能查找到互斥体.')
+                return reject('未找到互斥体');
             }
 
             const [, pid, type, handleId] = match;
             logger.info(`找到互斥体：PID=${pid}, 句柄=${handleId}`);
 
-            // 直接用 handle.exe 关闭，无需经过 PowerShell
-            exec(`"${HANDLE_EXE_PATH}" -c ${handleId} -p ${pid} -y`, (closeErr, closeStdout) => {
-                if (closeErr) {
-                    logger.warn(`直接关闭失败，尝试 PowerShell 提权: ${closeErr.message}`);
-                    closeHandle(pid, handleId).then(resolve).catch(reject);
-                } else {
-                    logger.info(`互斥体已释放：PID=${pid}, Handle=${handleId}`);
-                    resolve();
-                }
-            });
+            closeHandle(pid, handleId)
+                .then(resolve)
+                .catch(reject)
         });
     });
 }

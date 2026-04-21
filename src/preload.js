@@ -352,13 +352,11 @@ async function handleStartAll() {
     utools.hideMainWindow();
 
     try {
-        let started = 0;
         for (let i = 0; i < total; i++) {
             const account = accountList[i];
 
             // 复用 startWx 的完整逻辑：kill 进程 → 等待 → 复制配置 → 释放互斥体 → 启动
             await wechatHelp.startWx(account);
-            started++;
 
             // 最后一个账号不弹确认
             if (i < total - 1) {
@@ -370,7 +368,7 @@ async function handleStartAll() {
                 });
 
                 if (cont !== 1) {
-                    utools.showNotification(`已启动 ${started} 个账号`);
+                    utools.showNotification(`已启动 ${i + 1} 个账号`);
                     utools.outPlugin();
                     return;
                 }
@@ -380,7 +378,7 @@ async function handleStartAll() {
         utools.showNotification(`全部 ${total} 个账号已启动完毕！`);
     } catch (e) {
         logger.error("一键启动失败", e);
-        utools.showNotification("启动中断：已启动 " + started + " 个，失败原因：" + e.message);
+        utools.showNotification("一键启动失败：" + e.message);
     }
 
     utools.outPlugin();
