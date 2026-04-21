@@ -6,18 +6,47 @@
   ],
   "features": [
     {
-      "code": "wechat_plus",
-      "explain": "微信多开 Plus - 一个界面管理所有微信账号",
+      "code": "config",
+      "explain": "微信多开配置",
       "cmds": [
+        "微信多开配置"
+      ]
+    },
+    {
+      "code": "wechat_start",
+      "explain": "多开N个微信，支持保存快捷确认登录",
+      "cmds": [
+        "快速启动登录"
+      ]
+    },
+    {
+      "code": "wechat_list",
+      "explain": "多开微信列表",
+      "cmds": [
+        "多开列表",
         "微信多开",
-        "wxdk",
-        "多开",
-        "wechat"
+        "wxdk"
+      ]
+    },
+    {
+      "code": "wechat_delete_list",
+      "explain": "删除多开微信列表",
+      "cmds": [
+        "删除多开微信列表"
+      ]
+    },
+    {
+      "code": "wechat_save",
+      "explain": "登录完成之后要执行下方任一命令,保存确认登录信息，下次可以直接快捷登录",
+      "cmds": [
+        "多开确认",
+        "确认登录",
+        "wxok"
       ]
     },
     {
       "code": "wechat_file_path",
-      "explain": "设置微信文档目录（拖拽文件夹触发）",
+      "explain": "设置微信文档目录",
       "cmds": [
         {
           "type": "files",
