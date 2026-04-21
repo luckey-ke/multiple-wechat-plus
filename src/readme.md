@@ -1,14 +1,26 @@
-## 原理
-杀掉微信的 _WeChat_App_Instance_Identity_Mutex_Name 互斥句柄
+# 微信多开 Plus
 
+支持微信 4.0+ 版本的多开工具，一个界面管理所有微信账号。
 
-## 使用平台
-没找到nodejs调用dll杀掉 互斥句柄的方法
+## 功能
 
-只能使用别人的EXE执行了( https://github.com/anhkgg/SuperWeChatPC )
+- **新建多开**：一键启动新的微信实例
+- **保存账号**：保存当前登录信息，下次直接切换
+- **快速切换**：点击账号卡片即可切换登录
+- **删除账号**：右键删除不需要的账号
 
-下载地址：https://github.com/utools-blowsnow/multiple_wechat/releases/tag/multiple_wechat.exe
+## 使用方法
+
+1. 在 uTools 中搜索「微信多开」或「wxdk」
+2. 首次使用：进入配置中心 → 下载 handle.exe → 设置微信文档路径
+3. 日常使用：点击账号卡片即可切换登录
+
+## 路径设置
+
+支持两种方式设置微信文档路径：
+- 在配置中心点击「选择文件夹」按钮
+- 拖拽 `xwechat_files` 文件夹到 uTools 搜索框
 
 ## 开源
-https://github.com/utools-blowsnow/multiple_wechat
 
+https://github.com/luckey-ke/multiple-wechat-plus
