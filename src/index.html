@@ -661,12 +661,7 @@
   }
 
   // ===== 启动 =====
-  // 由 preload.js 注入 bridge 后触发，或手动调用
-  window.addEventListener('dashboard-ready', () => loadDashboard());
-  // 兜底：如果 2 秒内没收到 ready 事件，直接尝试
-  setTimeout(() => {
-    if (typeof window.getConfigStatus === 'function') loadDashboard();
-  }, 2000);
+  loadDashboard();
 </script>
 </body>
 </html>
