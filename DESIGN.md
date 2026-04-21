@@ -1,120 +1,84 @@
-# 微信多开 Plus — v2.0 重构方案
+# 微信多开 Plus — v3.0 仪表盘重构
 
 ## 一、背景
 
-旧版存在以下问题：
-- **6 个分散入口**：配置、快速启动、多开列表、确认登录、删除列表、拖拽路径，需要记不同关键词
-- **操作割裂**：每次使用需要在多个界面间来回切换
-- **代码维护困难**：6 个 feature 各自独立，`buildWechatList` 逻辑重复，错误处理各写各的
-- **多个 bug**：`isAccountLoggedIn` 路径拼接不一致、删除无二次确认、配置中心无状态检测
+v2.0 使用 uTools `list` 模式（原生文字列表），存在以下问题：
+- **多层级切换**：配置中心和账号列表是两个 Tab，需要来回切换
+- **操作割裂**：每次切换账号需点账号 → 弹窗确认 → 隐藏窗口 → 通知 → 退出
+- **视觉单一**：纯文字列表，无法直观展示配置状态和账号信息
+- **Bug 回归**：`fs.copyFileSync` 偶发 UNKNOWN 错误、切换账号需重新扫码
 
 ## 二、重构目标
 
-1. **统一界面**：一个入口，一个界面，完成所有操作
-2. **简化交互**：点击账号卡片即可切换账号，无需记忆关键词
-3. **保留全部功能**：配置、多开、保存、删除、路径设置（弹窗选择 + 拖拽双通道）
-4. **代码架构优化**：清晰分层，统一路由，消除重复逻辑
+1. **单页仪表盘**：配置状态、快捷操作、账号列表一屏展示，无需切换
+2. **即时启动**：点击启动直接启动，不再弹窗确认
+3. **修复核心 Bug**：copyFileSync 兼容性、login 会话目录备份/恢复
+4. **保留全部功能**：配置、多开、保存、删除、路径设置、拖拽排序
 
 ## 三、界面设计
 
-### 3.1 主界面（我的账号 Tab）
+### 3.1 仪表盘布局
 
 ```
-┌─────────────────────────────────────────┐
-│  🟢 微信多开 Plus                    v2.0 │
-├─────────────────────────────────────────┤
-│  [ 我的账号 ]    [ 配置中心 ]             │
-├─────────────────────────────────────────┤
-│                                          │
-│  ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐   │
-│  │  ➕   │ │  💾   │ │  🔄   │ │  ⚙️   │   │
-│  │新建多开│ │保存当前│ │刷新状态│ │ 设置 │   │
-│  └──────┘ └──────┘ └──────┘ └──────┘   │
-│                                          │
-│  已保存账号                        2 个   │
-│  ┌──────────────────────────────────┐   │
-│  │ 👤 wxid_8jyu15zfwqs422  🟢在线   │   │ ← 点击 → 切换登录
-│  │    wxid_8jyu15zfwqs422           │   │
-│  ├──────────────────────────────────┤   │
-│  │ 👤 wxid_ug1753bc46ta21  ⚪离线   │   │ ← 点击 → 切换登录
-│  │    wxid_ug1753bc46ta21           │   │
-│  └──────────────────────────────────┘   │
-└─────────────────────────────────────────┘
+┌──────────────────────────────────────────────┐
+│  🟢 handle.exe 已安装    🟢 路径已设置        │ ← 配置状态栏
+├──────────────────────────────────────────────┤
+│  [➕ 新建多开]  [💾 保存当前]  [🔄 刷新]     │ ← 快捷操作栏
+├──────────────────────────────────────────────┤
+│  👥 我的账号 (2个)                            │
+│  ┌──────────────────────────────────────┐    │
+│  │ 👤 wxid_001            [🚀 启动] ▲▼ 🗑│    │
+│  │    🟢 在线                            │    │
+│  ├──────────────────────────────────────┤    │
+│  │ 👤 wxid_002            [🚀 启动] ▲▼ 🗑│    │
+│  │    ⚪ 离线                            │    │
+│  └──────────────────────────────────────┘    │
+└──────────────────────────────────────────────┘
 ```
 
-**快捷操作栏：**
-
-| 按钮 | 功能 | 对应旧版 |
-|------|------|----------|
-| ➕ 新建多开 | 删除 config，启动新微信，登录后需保存 | `wechat_start` |
-| 💾 保存当前 | 保存当前已登录的微信账号信息 | `wechat_save` / `wxok` |
-| 🔄 刷新状态 | 重新检测所有账号的在线状态 | —（新增） |
-| ⚙️ 设置 | 切换到配置中心 Tab | `config` |
-
-**账号卡片交互：**
+### 3.2 交互说明
 
 | 操作 | 效果 |
 |------|------|
-| 点击 | 切换登录该账号（kill 旧进程 → 替换 config → 启动） |
+| 点击配置栏未就绪项 | 弹窗选择文件夹 / 下载 handle.exe |
+| 点击「新建多开」 | 杀进程 → 替换 config → 启动新微信 → 引导扫码 → 保存 |
+| 点击「保存当前」 | 扫描登录目录 → 备份 config + login 目录 → 出现在列表 |
+| 点击「🚀 启动」 | 杀进程 → 还原 config + login → 启动 → toast 提示，无需确认弹窗 |
+| 点击 🗑️ | 二次确认弹窗 → 删除配置目录 + 移除排序 |
+| 点击 ▲▼ | 即时调整排序位置，持久化存储 |
+| 空账号列表 | 引导文案："点击新建多开扫码登录后点保存当前" |
 
-### 3.2 配置中心 Tab
+### 3.3 配置状态
 
-```
-┌─────────────────────────────────────────┐
-│  [ 我的账号 ]    [ 配置中心 ]             │
-├─────────────────────────────────────────┤
-│                                          │
-│  首次使用请完成以下配置：                  │
-│                                          │
-│  ┌──────────────────────────────────┐   │
-│  │ 📥 ① 下载 handle.exe              │   │
-│  │    用于释放文件锁和互斥体           │   │
-│  │    状态：[ 已安装 ✓ ]  /  [下载]   │   │
-│  └──────────────────────────────────┘   │
-│  ┌──────────────────────────────────┐   │
-│  │ 📂 ② 设置微信文档路径              │   │
-│  │    当前：E:\...\xwechat_files     │   │
-│  │    [ 选择文件夹 ] 或 拖拽到搜索框   │   │
-│  │    获取方式：微信→账号与存储→      │   │
-│  │    存储位置→更改→复制路径         │   │
-│  └──────────────────────────────────┘   │
-│  ┌──────────────────────────────────┐   │
-│  │ ℹ️  使用须知                       │   │
-│  │    • 仅支持微信 4.0+              │   │
-│  │    • 低版本请搜索 blowsnow 旧插件  │   │
-│  └──────────────────────────────────┘   │
-│                                          │
-│  ✅ 所有配置完成！可以开始使用了           │
-│                                          │
-│  ← 返回我的账号                           │
-└─────────────────────────────────────────┘
-```
-
-- 配置项实时显示状态（✅ 已安装 / 未安装，✅ 已设置 / 未设置）
-- 全部配置完成后底部显示绿色提示
-- 路径设置支持两种方式：点击按钮弹原生文件夹选择器 / 拖拽文件夹到搜索框
-- 底部「返回我的账号」切回主界面
+| 状态 | 配置栏显示 |
+|------|-----------|
+| handle.exe 已安装 + 路径已设置 | 🟢 绿灯，可正常操作 |
+| handle.exe 未安装 | 🔴 红灯，点击下载 |
+| 路径未设置 | 🔴 红灯，点击选择 / 拖拽文件夹 |
+| 配置未就绪时操作账号 | toast 提示 + 自动高亮配置栏 |
 
 ## 四、用户操作流程
 
 ### 首次使用
 ```
-搜索"微信多开" → 配置中心 Tab → 下载 handle → 设路径 → 切到"我的账号" → 新建多开 → 扫码 → 保存
+搜索"微信多开" → 顶部红灯提示未配置 → 点击下载 handle → 点击设置路径
+→ 配置完成变绿灯 → 点击「新建多开」 → 扫码登录 → 点击「保存当前」
+→ 账号出现在列表中 ✅
 ```
 
 ### 日常使用（最短路径）
 ```
-搜索"微信多开" → 点击账号卡片 → 自动切换登录 ✅
+搜索"微信多开" → 点击账号卡片的「🚀 启动」→ 自动切换登录 ✅
 ```
 
 ### 保存新账号
 ```
-"我的账号"Tab → 新建多开 → 扫码登录 → 点击"保存当前" → 出现在列表中
+打开插件 → 新建多开 → 扫码登录 → 保存当前 → 出现在列表
 ```
 
 ### 路径设置（双通道）
 ```
-方式1：配置中心 → 点击"选择文件夹" → 弹窗选择 → 保存
+方式1：点击顶部配置栏路径项 → 弹窗选择文件夹
 方式2：拖拽 xwechat_files 文件夹到 uTools 搜索框 → 自动保存
 ```
 
@@ -124,19 +88,19 @@
 ```
 multiple-wechat-plus/
 ├── src/
-│   ├── plugin.json          # 2 个 feature
-│   ├── preload.js           # 统一路由 + 操作处理
-│   ├── index.html           # 空（uTools list 模式不需要 HTML）
+│   ├── plugin.json          # 2 个 feature（wechat_plus + wechat_file_path）
+│   ├── preload.js           # Node.js 层：暴露 window.wechatAPI
+│   ├── index.html           # 完整仪表盘 UI（HTML + CSS + JS）
 │   ├── logo.png / logo1.png # 图标
 │   ├── package.json         # 依赖
 │   ├── readme.md            # 使用说明
 │   └── lib/
-│       ├── wechatHelp.js    # 微信操作核心（已修复 bug）
-│       ├── kill.js          # 进程管理（不变）
-│       ├── file.js          # 文件工具（不变）
-│       ├── error.js         # 自定义错误（不变）
-│       ├── logger.js        # 日志（不变）
-│       └── utoolsHelp.js    # uTools 存储封装（不变）
+│       ├── wechatHelp.js    # 微信操作核心（含 login 备份/还原）
+│       ├── kill.js          # 进程管理 + handle.exe 下载
+│       ├── file.js          # 文件工具
+│       ├── error.js         # 自定义错误
+│       ├── logger.js        # 日志
+│       └── utoolsHelp.js    # uTools 存储封装
 ├── test/
 │   ├── test_wechat.js
 │   └── test_kill.js
@@ -145,174 +109,195 @@ multiple-wechat-plus/
 
 ### 5.2 plugin.json
 
-**旧版：6 个 feature**
 ```json
-"features": [
-  { "code": "config" },
-  { "code": "wechat_start" },
-  { "code": "wechat_list" },
-  { "code": "wechat_delete_list" },
-  { "code": "wechat_save" },
-  { "code": "wechat_file_path" }
-]
+{
+  "logo": "logo.png",
+  "preload": "preload.js",
+  "platform": ["win32"],
+  "features": [
+    {
+      "code": "wechat_plus",
+      "explain": "微信多开 Plus - 一个界面管理所有微信账号",
+      "cmds": ["微信多开", "wxdk", "多开", "wechat"]
+    },
+    {
+      "code": "wechat_file_path",
+      "explain": "设置微信文档目录（拖拽文件夹触发）",
+      "cmds": [{ "type": "files", "fileType": "directory", "minLength": 1, "maxLength": 1 }]
+    }
+  ]
+}
 ```
-
-**新版：2 个 feature**
-```json
-"features": [
-  {
-    "code": "wechat_plus",
-    "explain": "微信多开 Plus - 一个界面管理所有微信账号",
-    "cmds": ["微信多开", "wxdk", "多开", "wechat"]
-  },
-  {
-    "code": "wechat_file_path",
-    "explain": "设置微信文档目录（拖拽文件夹触发）",
-    "cmds": [{ "type": "files", "fileType": "directory", "minLength": 1, "maxLength": 1 }]
-  }
-]
-```
-
-- `wechat_plus`：搜索触发，主界面入口
-- `wechat_file_path`：拖拽文件夹触发，仅支持拖拽，不在搜索列表显示
 
 ### 5.3 preload.js 架构
 
-**旧版：6 个 exports 各自独立**
+**职责**：Node.js 运行环境，桥接业务逻辑和 UI。
+
 ```js
+// 暴露给 index.html 的 API
+window.wechatAPI = {
+    getConfigStatus()           // { ready, handleInstalled, pathSet }
+    handleExists()              // boolean
+    async startWx(itemData)     // { success, configError?, message }
+    async saveWxData()          // { success, data?, message }
+    async getAccountList()      // Account[] | null (配置未就绪)
+    moveUp(wxid)                // 即时排序
+    moveDown(wxid)              // 即时排序
+    async deleteAccount(id)     // boolean
+    saveWechatFilePath(p)       // 路径校验 + 存储
+    async downloadHandle()      // { success, message }
+}
+
+// 插件入口
 window.exports = {
-  "wechat_list":        { mode: "list",  args: { enter, search, select } },
-  "wechat_start":       { mode: "none",  args: { enter } },
-  "wechat_save":        { mode: "none",  args: { enter } },
-  "wechat_delete_list": { mode: "list",  args: { enter, search, select } },
-  "wechat_file_path":   { mode: "none",  args: { enter } },
-  "config":             { mode: "list",  args: { enter, select } },
+    wechat_plus:     { mode: 'docview', args: { enter } }  // 仪表盘
+    wechat_file_path:{ mode: 'none',    args: { enter } }  // 拖拽触发
 }
-// 问题：buildWechatList 写了2遍，错误处理各自重复
 ```
 
-**新版：1 个统一路由 + 1 个辅助出口**
+**数据流**：
+```
+index.html ──onclick──→ window.wechatAPI.* ──→ wechatHelp.js / kill.js ──→ fs / process
+                          ↓ 返回结果
+index.html ←──重新渲染←── toast 通知
+```
+
+### 5.4 index.html 架构
+
+**职责**：完整的仪表盘 UI，通过 `window.wechatAPI` 调用业务逻辑。
+
+- **配置栏**：`renderConfigBar()` — 读取 `getConfigStatus()` 渲染绿/红指示灯
+- **账号列表**：`renderAccounts()` — 异步调用 `getAccountList()` 渲染卡片
+- **操作函数**：`doNewWx()`、`doLaunch()`、`doSave()`、`doDelete()` 等
+- **Toast 通知**：底部浮动提示，替代 utools 原生通知
+- **状态管理**：全局 `busy` 标记防止并发启动
+
+### 5.5 wechatHelp.js 核心变更
+
+#### 1. login 会话目录备份/还原（修复免登问题）
+
+**根因**：每次登录生成不同 `device_id`（写入 global_config），会话存储在 `all_users/login/{wxid}/`。切换时只还原 global_config，login 目录残留所有历史会话，导致 device_id 不匹配。
+
+**修复**：
 ```js
-window.exports = {
-  "wechat_plus": {
-    mode: "list",
-    args: {
-      enter:  (action, callbackSetList) => { /* 检测配置 + 加载账号 + 渲染 */ },
-      search: (action, searchWord, callbackSetList) => { /* 按 state 过滤 */ },
-      select: (action, itemData, callbackSetList) => {
-        // 按 itemData.type 路由：
-        //   "account"   → handleSwitchAccount()  切换登录
-        //   "new"       → handleNewWx()           新建多开
-        //   "save"      → handleSaveWx()          保存当前
-        //   "refresh"   → 刷新账号列表（重新检测在线状态）
-        //   "config"    → 切换到配置中心 Tab
-        //   "back"      → 返回我的账号 Tab
-        //   "download"  → handleDownloadHandle()  下载 handle.exe
-        //   "setpath"   → handleSetPath()         弹窗选文件夹
-        //   "info"      → 无操作（使用须知）
-        //   "ready"     → 无操作（配置完成提示）
-        //   "delete"    → handleDeleteAccount()   删除账号（二次确认）
-      }
+// saveWxData — 新增 login 目录备份
+const loginSrcDir = path.join(loginPath, wxid);
+const loginBackupDir = path.join(wxidPath, "login_backup");
+this.#copyDirSync(loginSrcDir, loginBackupDir);
+
+// startWx — 新增 login 目录还原
+const loginBackupDir = path.join(itemData.path, "login_backup");
+fs.rmSync(loginDir, { recursive: true, force: true });  // 清空旧会话
+fs.mkdirSync(loginDir, { recursive: true });
+this.#copyDirSync(loginBackupDir, path.join(loginDir, itemData.id));  // 只还原目标账号
+```
+
+#### 2. copyFileSync 兼容性修复（修复 UNKNOWN 错误）
+
+**根因**：Windows 上 `fs.rmSync` 删除文件后，NTFS 文件系统未完全释放句柄，紧接着 `fs.copyFileSync` 写入同路径偶发 `UNKNOWN: unknown error`。
+
+**修复**：
+```js
+// safeRemove — 删除后轮询确认文件消失
+async function safeRemove(filePath) {
+    fs.rmSync(filePath, { force: true });
+    for (let i = 0; i < 10; i++) {
+        await new Promise(r => setTimeout(r, 200));
+        if (!fs.existsSync(filePath)) break;
     }
-  },
-  "wechat_file_path": {
-    mode: "none",
-    args: {
-      enter: ({code, type, payload}) => {
-        // 拖拽文件夹触发 → 调 wechatHelp.saveWechatFilePath()
-        // 与配置中心"选择文件夹"走同一个保存逻辑
-      }
+}
+
+// retryCopyFileSync — copyFileSync 失败自动重试
+function retryCopyFileSync(src, dest, retries = 5) {
+    for (let i = 0; i < retries; i++) {
+        try { fs.copyFileSync(src, dest); return; }
+        catch (e) {
+            if (i === retries - 1) throw e;
+            const start = Date.now();
+            while (Date.now() - start < 300) {}  // 同步等待
+        }
     }
-  }
 }
 ```
 
-**Tab 切换原理：** 利用 uTools list 模式的 `callbackSetList`，在 `select` 回调中调用即可替换列表内容而不关闭插件。通过全局状态 `window._wechatPlusData.state`（`'main'` / `'config'`）跟踪当前所在 Tab。
-
-**首次使用引导：** 如果 `getLocalWechatAccountList()` 抛出 `GoConfigError`（路径未配置），自动跳转到配置中心 Tab。
-
-### 5.4 wechatHelp.js 变更
-
-**修复 Bug：`isAccountLoggedIn` 路径不一致**
-
-旧版两处用不同逻辑拼接路径，导致 `saveWxData` 返回的 `isLogin` 可能永远为 `false`：
+#### 3. 递归目录复制
 
 ```js
-// 旧版 getLocalWechatAccountList（第 219 行）
-isLogin: this.isAccountLoggedIn(wxidRealPath)  // ✅ 用 findDirName 查找
-
-// 旧版 saveWxData（第 273 行）
-isLogin: this.isAccountLoggedIn(path.join(wechatFilePath, wxid))  // ❌ 直接拼接
-```
-
-新版两处统一使用 `findDirName` 查找真实目录路径，并增加 null 保护：
-```js
-// 新版两处统一
-const accountRealPath = findDirName(wechatFilePath, wxid);
-isLogin: accountRealPath ? this.isAccountLoggedIn(accountRealPath) : false
-```
-
-**新增方法：`getConfigStatus()`**
-
-```js
-getConfigStatus() {
-  return {
-    ready: handleInstalled && pathSet,
-    handleInstalled: fs.existsSync(HANDLE_EXE_PATH),
-    pathSet: /* 路径已设置且有效 */
-  }
+#copyDirSync(src, dest) {
+    if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
+    const entries = fs.readdirSync(src, { withFileTypes: true });
+    for (const entry of entries) {
+        if (entry.isDirectory()) this.#copyDirSync(srcPath, destPath);
+        else fs.copyFileSync(srcPath, destPath);
+    }
 }
 ```
 
-供配置中心 Tab 实时显示状态。
+## 六、技术细节
 
-**修复 Bug：`#getWechatDocumentPath` 未处理 null**
+### 6.1 docview 模式 vs list 模式
 
-旧版从数据库取出值后直接传给 `fs.existsSync`，如果值为 `null` 会异常。新版增加 `&& fs.existsSync()` 双重检查。
+| | list 模式 | docview 模式 |
+|---|---|---|
+| UI | uTools 原生列表 | 自定义 HTML |
+| 交互 | enter/search/select 回调 | onclick → API 调用 |
+| 样式 | 无法自定义 | 完全可控（CSS） |
+| 复杂度 | 低（纯文字） | 中（需写 HTML/CSS） |
+| 本次选择 | ❌ 旧版 | ✅ 新版 |
 
-## 六、搜索关键词映射
+### 6.2 启动防并发
+
+全局 `busy` 标记：
+- 启动中：所有「🚀 启动」按钮显示 spinner + disabled
+- 「新建多开」按钮同步 disabled
+- 启动完成后自动恢复，刷新在线状态
+
+### 6.3 账号排序持久化
+
+排序数组存储在 `dbDevice`（key: `accountSortOrder`）：
+- 新增账号：push 到末尾
+- 删除账号：从数组中移除
+- 上移/下移：swap 操作
+- 渲染时按排序数组重排账号列表
+
+### 6.4 数据迁移兼容
+
+- `plugin_save_config/{wxid}/` 目录结构不变
+- `global_config` + `global_config.crc` 格式不变
+- 新增 `login_backup/` 子目录（旧版保存的账号无此目录，切换时跳过 login 还原）
+- dbDevice key 不变，完全兼容旧版数据
+
+## 七、搜索关键词
 
 | 关键词 | 效果 |
 |--------|------|
-| 微信多开 | 打开主界面 |
-| wxdk | 打开主界面 |
-| 多开 | 打开主界面 |
-| wechat | 打开主界面 |
+| 微信多开 | 打开仪表盘 |
+| wxdk | 打开仪表盘 |
+| 多开 | 打开仪表盘 |
+| wechat | 打开仪表盘 |
 
-旧版的 `快速启动登录`、`wxok`、`多开确认`、`删除多开列表`、`微信多开配置` 等关键词不再需要，操作全部在主界面完成。
+## 八、兼容性
 
-## 七、兼容性
+- **平台**：仅 Windows
+- **微信版本**：仅 4.0+
+- **uTools 版本**：需支持 `preload.js` 的版本（1.x / 2.x）
+- **electron.remote**：路径选择使用 `electron.remote.dialog`，uTools 3.x 已移除 remote，后续需适配
 
-- **平台**：仅 Windows（与现有版本一致）
-- **微信版本**：仅 4.0+（与现有版本一致）
-- **uTools 版本**：需要支持 `preload.js` 的版本（1.x / 2.x）
-  - ⚠️ `dialog.showOpenDialog` 使用 `electron.remote`，uTools 3.x 已移除 remote，需适配
-- **数据迁移**：`plugin_save_config` 目录结构不变，旧版保存的账号数据完全兼容
-- **dbDevice 存储**：key 不变（`wechatFilePath_设备ID`、`wx_wxid_xxx_设备ID`）
+## 九、变更日志
 
-## 八、迭代计划
+### v3.0 — 仪表盘重构 (2026-04-21)
+- **UI**：list 模式 → docview 模式，单页仪表盘
+- **交互**：删除确认弹窗，启动直接启动无需确认
+- **Bug**：修复 copyFileSync UNKNOWN 错误
+- **Bug**：修复切换账号需重新扫码问题（login 目录备份/还原）
+- **代码**：preload.js 重写为 API 桥接层，index.html 全新 UI
 
-### Phase 1：统一界面（✅ 本次完成）
-- [x] 新建 plugin.json（2 个 feature）
-- [x] 重写 preload.js（统一路由）
-- [x] 修复 wechatHelp.js bug（路径不一致、null 处理）
-- [x] 新增 getConfigStatus() 方法
-- [x] 删除操作加二次确认
-- [x] 保留所有 lib/ 核心逻辑
-- [x] 更新 readme.md
-- [ ] 测试：首次配置、新建多开、切换登录、保存、删除
+### v2.0 — 统一界面 (2026-04-21)
+- 6 个 feature → 2 个 feature
+- list 模式统一入口 + Tab 切换
+- 修复 isAccountLoggedIn 路径不一致
+- 新增排序、批量启动
 
-### Phase 2：体验优化（✅ 本次完成）
-- [x] 拖拽排序：每个账号卡片后附 ⬆️上移/⬇️下移 控制项，排序持久化到 dbDevice
-- [x] 批量启动：有 2 个以上账号时显示"🚀 一键启动全部"，按排序顺序依次启动，每次弹窗等待用户确认
-- [x] 账号排序持久化：新增/删除账号自动维护排序数组
-- [x] 暴露 `getDocPath()` 公开方法供批量启动使用
-- [ ] 账号自定义头像/昵称
-- [ ] `fileToBase64` 改为 Promise.all 并行加载
-- [ ] uTools 3.x 兼容（替换 `electron.remote`）
-- [ ] 开机自启选项
-
-### Phase 3：高级功能（后续）
-- [ ] 批量启动（一键打开全部账号）
-- [ ] 登录状态持久化检测
-- [ ] 自动保存提醒
+### v1.0 — 初始版本
+- 6 个分散入口
+- 基础多开功能
