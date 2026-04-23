@@ -267,7 +267,7 @@ window.saveAccountOrder = saveAccountOrder;
 
 window.exports = {
     dashboard: {
-        mode: 'panel',
+        mode: 'doc',
         args: {
             enter: () => {
                 // panel 模式下 uTools 自动渲染 index.html，无需额外操作
