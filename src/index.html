@@ -69,6 +69,25 @@
     .loading::before { content: ''; display: inline-block; width: 16px; height: 16px; border: 2px solid #dfe6e9; border-top-color: #0984e3; border-radius: 50%; animation: spin 0.6s linear infinite; margin-right: 8px; vertical-align: middle; }
     @keyframes spin { to { transform: rotate(360deg); } }
     .account-card.drag-over { border-color: #0984e3; background: #f0f8ff; }
+
+    /* ===== 帮助按钮 ===== */
+    .help-btn { width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid #b2bec3; background: #fff; color: #636e72; font-size: 13px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: all 0.15s; flex-shrink: 0; line-height: 1; }
+    .help-btn:hover { border-color: #0984e3; color: #0984e3; background: #f0f8ff; }
+
+    /* ===== 弹框 ===== */
+    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.45); z-index: 1000; display: none; align-items: center; justify-content: center; }
+    .modal-overlay.show { display: flex; }
+    .modal-box { background: #fff; border-radius: 14px; padding: 28px 30px; max-width: 480px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 12px 40px rgba(0,0,0,0.15); animation: modalIn 0.2s ease-out; }
+    @keyframes modalIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+    .modal-title { font-size: 16px; font-weight: 600; color: #2d3436; margin-bottom: 18px; display: flex; align-items: center; gap: 8px; }
+    .modal-close { margin-left: auto; background: none; border: none; font-size: 18px; color: #b2bec3; cursor: pointer; padding: 2px 6px; border-radius: 6px; }
+    .modal-close:hover { background: #f0f2f5; color: #636e72; }
+    .modal-body h4 { font-size: 13px; font-weight: 600; color: #2d3436; margin: 16px 0 8px; display: flex; align-items: center; gap: 6px; }
+    .modal-body h4:first-child { margin-top: 0; }
+    .modal-body p, .modal-body li { font-size: 12px; color: #636e72; line-height: 1.8; }
+    .modal-body ul { padding-left: 18px; }
+    .modal-body .step-num { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; background: #0984e3; color: #fff; font-size: 11px; font-weight: 600; flex-shrink: 0; }
+    .modal-body .tip { background: #fff8e6; border-radius: 8px; padding: 10px 14px; margin-top: 12px; font-size: 11px; color: #b07000; }
   </style>
 </head>
 <body>
@@ -101,6 +120,48 @@
       <button class="btn btn-success" id="btnSave">💾 保存当前登录</button>
       <button class="btn btn-ghost" id="btnRefresh">🔄 刷新</button>
     </div>
+    <!-- 使用说明弹框 -->
+    <div class="modal-overlay" id="helpModal">
+      <div class="modal-box">
+        <div class="modal-title">
+          📖 使用说明
+          <button class="modal-close" id="helpClose">✕</button>
+        </div>
+        <div class="modal-body">
+          <h4><span class="step-num">1</span> 首次配置</h4>
+          <ul>
+            <li><b>下载 handle.exe</b> — 点击「下载 handle.exe」按钮，自动从微软官方下载并解压</li>
+            <li><b>设置微信文档路径</b> — 点击「设置文件夹」，选择微信的 <code>xwechat_files</code> 目录（通常在 <code>文档\WeChat Files</code> 下）</li>
+          </ul>
+
+          <h4><span class="step-num">2</span> 新建多开</h4>
+          <ul>
+            <li>点击「➕ 新建多开」，会自动启动一个新的微信登录窗口</li>
+            <li>登录完成后，回到本插件点击「💾 保存当前登录」</li>
+            <li>保存成功后，该账号会出现在下方列表中</li>
+          </ul>
+
+          <h4><span class="step-num">3</span> 快速启动</h4>
+          <ul>
+            <li>点击账号卡片上的「启动」按钮，可免登录直接启动该微信</li>
+            <li>多开免登需要<b>按首次保存顺序</b>依次启动</li>
+          </ul>
+
+          <h4><span class="step-num">4</span> 其他操作</h4>
+          <ul>
+            <li><b>排序</b> — 拖拽账号卡片或点击 ↑↓ 按钮调整顺序</li>
+            <li><b>搜索</b> — 在搜索框输入账号名或 ID 快速查找</li>
+            <li><b>删除</b> — 点击 🗑 按钮删除已保存的账号（不可恢复）</li>
+            <li><b>打开文件夹</b> — 点击 🂃 按钮可直接打开 handle.exe 或微信文档所在目录</li>
+          </ul>
+
+          <div class="tip">
+            💡 <b>提示：</b>如果启动失败，请确认 handle.exe 已下载、微信文档路径已设置，且微信未在运行中。
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="account-section">
       <div class="account-header">
         <div>
@@ -108,7 +169,10 @@
           <span class="account-count" id="accountCount">0</span>
           <span style="font-size:10px;color:#b2bec3;margin-left:6px">多开免登需要按首次保存顺序启动</span>
         </div>
-        <input class="search-input" id="searchInput" placeholder="搜索账号...">
+        <div style="display:flex;align-items:center;gap:8px">
+          <input class="search-input" id="searchInput" placeholder="搜索账号...">
+          <button class="help-btn" id="helpBtn" title="使用说明">?</button>
+        </div>
       </div>
       <div id="accountList"><div class="loading">加载中...</div></div>
     </div>
@@ -341,6 +405,19 @@ document.getElementById('btnSave').addEventListener('click', async () => {
 });
 
 document.getElementById('btnRefresh').addEventListener('click', loadDashboard);
+
+// ===== 使用说明弹框 =====
+document.getElementById('helpBtn').addEventListener('click', () => {
+  document.getElementById('helpModal').classList.add('show');
+});
+document.getElementById('helpClose').addEventListener('click', () => {
+  document.getElementById('helpModal').classList.remove('show');
+});
+document.getElementById('helpModal').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) {
+    document.getElementById('helpModal').classList.remove('show');
+  }
+});
 
 // ===== 启动 =====
 utools.onPluginEnter(() => { loadDashboard(); });
