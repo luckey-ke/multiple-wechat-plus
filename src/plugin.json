@@ -11,7 +11,8 @@
         "wxdk",
         "多开列表"
       ],
-      "platform": ["win32"]
+      "platform": ["win32"],
+      "main": "index.html"
     },
     {
       "code": "wechat_file_path",
