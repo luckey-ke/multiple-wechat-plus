@@ -396,28 +396,36 @@ function escHtml(s) {
 // ===== 加载仪表盘 =====
 async function loadDashboard() {
   hideError();
+  console.log('[loadDashboard] 开始');
   try {
     const status = await api.getConfigStatus();
+    console.log('[loadDashboard] status:', JSON.stringify(status));
     renderConfig(status);
     const ready = status.handle.installed && status.wechatPath;
+    console.log('[loadDashboard] ready:', ready);
     document.getElementById('btnNew').disabled = !ready;
     document.getElementById('btnSave').disabled = !ready;
     document.getElementById('searchInput').disabled = !ready;
     if (ready) {
       try {
         allAccounts = await api.getWechatList() || [];
+        console.log('[loadDashboard] accounts:', allAccounts.length);
         renderAccounts(allAccounts);
       } catch (e) {
+        console.error('[loadDashboard] getWechatList error:', e);
         showError('获取账号列表失败: ' + e.message);
         renderAccounts([]);
       }
     } else {
+      console.log('[loadDashboard] 未就绪，显示空状态');
       renderAccounts([]);
     }
   } catch (e) {
+    console.error('[loadDashboard] getConfigStatus error:', e);
     showError('加载失败: ' + e.message);
     renderAccounts([]);
   }
+  console.log('[loadDashboard] 结束');
 }
 
 function renderConfig(status) {
