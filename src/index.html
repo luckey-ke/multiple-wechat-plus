@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>微信多开仪表盘</title>
+  <title>微信多开助手</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -13,9 +13,10 @@
       color: #2d3436;
       padding: 20px;
       min-height: 100vh;
+      -webkit-app-region: no-drag;
+      user-select: auto;
     }
 
-    /* ===== 全局 ===== */
     .dashboard { max-width: 680px; margin: 0 auto; }
 
     h2.section-title {
@@ -146,19 +147,14 @@
     .btn-success { background: #00b894; color: #fff; }
     .btn-success:hover { background: #00a381; }
 
-    .btn-ghost {
-      background: #f0f3f5;
-      color: #636e72;
-    }
+    .btn-ghost { background: #f0f3f5; color: #636e72; }
     .btn-ghost:hover { background: #dfe6e9; }
 
-    .btn-danger {
-      background: #fff0f0;
-      color: #d63031;
-    }
+    .btn-danger { background: #fff0f0; color: #d63031; }
     .btn-danger:hover { background: #ffe0e0; }
 
     .btn-sm { padding: 5px 10px; font-size: 11px; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
     /* ===== 账号列表 ===== */
     .account-section {
@@ -175,10 +171,7 @@
       margin-bottom: 14px;
     }
 
-    .account-header h3 {
-      font-size: 15px;
-      font-weight: 600;
-    }
+    .account-header h3 { font-size: 15px; font-weight: 600; }
 
     .account-count {
       font-size: 11px;
@@ -200,10 +193,7 @@
       background: #f8f9fa url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23b2bec3' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E") 10px center no-repeat;
       transition: border-color 0.15s;
     }
-    .search-input:focus {
-      border-color: #0984e3;
-      background-color: #fff;
-    }
+    .search-input:focus { border-color: #0984e3; background-color: #fff; }
 
     /* 账号卡片 */
     .account-card {
@@ -214,13 +204,9 @@
       border-radius: 10px;
       margin-bottom: 8px;
       transition: all 0.15s;
-      position: relative;
     }
     .account-card:last-child { margin-bottom: 0; }
-    .account-card:hover {
-      border-color: #dfe6e9;
-      background: #fafbfc;
-    }
+    .account-card:hover { border-color: #dfe6e9; background: #fafbfc; }
 
     .account-avatar {
       width: 42px;
@@ -261,10 +247,7 @@
     .status-online  { background: #00b894; box-shadow: 0 0 4px rgba(0,184,148,0.4); }
     .status-offline { background: #dfe6e9; }
 
-    .status-text {
-      font-size: 10px;
-      font-weight: 600;
-    }
+    .status-text { font-size: 10px; font-weight: 600; }
     .status-text.online  { color: #00b894; }
     .status-text.offline { color: #b2bec3; }
 
@@ -276,16 +259,12 @@
     }
 
     /* ===== 空状态 ===== */
-    .empty {
-      text-align: center;
-      padding: 48px 20px;
-      color: #b2bec3;
-    }
+    .empty { text-align: center; padding: 48px 20px; color: #b2bec3; }
     .empty-icon { font-size: 40px; margin-bottom: 12px; }
     .empty-title { font-size: 14px; font-weight: 500; color: #636e72; margin-bottom: 6px; }
     .empty-desc { font-size: 12px; line-height: 1.6; }
 
-    /* ===== 错误状态 ===== */
+    /* ===== 错误横条 ===== */
     .error-banner {
       background: #fff5f5;
       border: 1px solid #ffe0e0;
@@ -320,12 +299,7 @@
     .toast.toast-err { background: #d63031; }
 
     /* ===== 加载 ===== */
-    .loading {
-      text-align: center;
-      padding: 40px;
-      color: #b2bec3;
-      font-size: 13px;
-    }
+    .loading { text-align: center; padding: 40px; color: #b2bec3; font-size: 13px; }
     .loading::before {
       content: '';
       display: inline-block;
@@ -340,23 +314,7 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* ===== 拖拽排序高亮 ===== */
-    .account-card.drag-over {
-      border-color: #0984e3;
-      background: #f0f8ff;
-    }
-
-    /* ===== 提示横条 ===== */
-    .hint-bar {
-      background: #fff8e6;
-      border-radius: 10px;
-      padding: 10px 16px;
-      margin-bottom: 16px;
-      font-size: 12px;
-      color: #b07000;
-      display: none;
-    }
-    .hint-bar.show { display: flex; align-items: center; gap: 6px; }
+    .account-card.drag-over { border-color: #0984e3; background: #f0f8ff; }
   </style>
 </head>
 <body>
@@ -364,45 +322,36 @@
   <div class="toast" id="toast"></div>
 
   <div class="dashboard">
-
-    <!-- 错误提示 -->
     <div class="error-banner" id="errorBanner">
       <span>⚠️</span>
       <span id="errorText"></span>
     </div>
 
-    <!-- 配置状态 -->
     <h2 class="section-title">⚙️ 配置状态</h2>
     <div class="config-bar">
-      <div class="config-card" id="handleCard">
+      <div class="config-card">
         <div class="card-label">handle.exe</div>
-        <div class="card-value" id="handleStatus">
-          <span class="loading" style="padding:0;font-size:12px"></span>
-        </div>
+        <div class="card-value" id="handleStatus"><span class="loading" style="padding:0;font-size:12px"></span></div>
         <div class="card-path" id="handlePath"></div>
         <div class="progress-wrap" id="handleProgress"><div class="progress-bar" id="handleProgressBar"></div></div>
         <div class="progress-text" id="handleProgressText"></div>
         <div class="card-actions" id="handleActions"></div>
       </div>
-      <div class="config-card" id="pathCard">
+      <div class="config-card">
         <div class="card-label">微信文档路径</div>
-        <div class="card-value" id="pathStatus">
-          <span class="loading" style="padding:0;font-size:12px"></span>
-        </div>
+        <div class="card-value" id="pathStatus"><span class="loading" style="padding:0;font-size:12px"></span></div>
         <div class="card-path" id="pathText"></div>
         <div class="card-actions" id="pathActions"></div>
       </div>
     </div>
 
-    <!-- 快捷操作 -->
     <h2 class="section-title">⚡ 快捷操作</h2>
     <div class="action-bar">
-      <button class="btn btn-primary" id="btnNew" onclick="handleNewWechat()">➕ 新建多开</button>
-      <button class="btn btn-success" id="btnSave" onclick="handleSaveCurrent()">💾 保存当前登录</button>
-      <button class="btn btn-ghost" onclick="loadDashboard()">🔄 刷新</button>
+      <button class="btn btn-primary" id="btnNew">➕ 新建多开</button>
+      <button class="btn btn-success" id="btnSave">💾 保存当前登录</button>
+      <button class="btn btn-ghost" id="btnRefresh">🔄 刷新</button>
     </div>
 
-    <!-- 账号列表 -->
     <div class="account-section">
       <div class="account-header">
         <div>
@@ -410,343 +359,245 @@
           <span class="account-count" id="accountCount">0</span>
           <span style="font-size:10px;color:#b2bec3;margin-left:6px">多开免登需要按首次保存顺序启动</span>
         </div>
-        <input class="search-input" id="searchInput" placeholder="搜索账号..." oninput="filterAccounts(this.value)">
+        <input class="search-input" id="searchInput" placeholder="搜索账号...">
       </div>
-      <div id="accountList">
-        <div class="loading">加载中...</div>
-      </div>
+      <div id="accountList"><div class="loading">加载中...</div></div>
     </div>
-
   </div>
 
 <script>
-  let allAccounts = [];
-  let displayAccounts = [];  // 当前显示的列表（可能是搜索过滤后的）
+const api = window.api;
+let allAccounts = [];
+let displayAccounts = [];
 
-  // ===== Toast =====
-  function toast(msg, isError, duration) {
-    const el = document.getElementById('toast');
-    el.textContent = msg;
-    el.className = 'toast show' + (isError ? ' toast-err' : '');
-    clearTimeout(el._timer);
-    el._timer = setTimeout(() => el.className = 'toast', duration || 2000);
-  }
+// ===== Toast =====
+function toast(msg, isError, duration) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show' + (isError ? ' toast-err' : '');
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => el.className = 'toast', duration || 2000);
+}
 
-  // ===== 错误横条 =====
-  function showError(msg) {
-    const el = document.getElementById('errorBanner');
-    document.getElementById('errorText').textContent = msg;
-    el.classList.add('show');
-  }
-  function hideError() {
-    document.getElementById('errorBanner').classList.remove('show');
-  }
+function showError(msg) {
+  document.getElementById('errorText').textContent = msg;
+  document.getElementById('errorBanner').classList.add('show');
+}
+function hideError() {
+  document.getElementById('errorBanner').classList.remove('show');
+}
 
-  // ===== 检查配置是否就绪 =====
-  function isConfigReady(status) {
-    return status.handle.installed && status.wechatPath;
-  }
+function escHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
 
-  // ===== 加载仪表盘 =====
-  async function loadDashboard() {
-    hideError();
-    try {
-      const status = await window.getConfigStatus();
-      renderConfig(status);
-
-      // 配置未完成 → 禁用操作按钮
-      const ready = isConfigReady(status);
-      document.getElementById('btnNew').disabled = !ready;
-      document.getElementById('btnSave').disabled = !ready;
-      document.getElementById('btnNew').style.opacity = ready ? '1' : '0.4';
-      document.getElementById('btnSave').style.opacity = ready ? '1' : '0.4';
-      document.getElementById('searchInput').disabled = !ready;
-
-      if (ready) {
-        try {
-          allAccounts = await window.getWechatList() || [];
-          renderAccounts(allAccounts);
-        } catch (e) {
-          showError('获取账号列表失败: ' + e.message);
-          renderAccounts([]);
-        }
-      } else {
+// ===== 加载仪表盘 =====
+async function loadDashboard() {
+  hideError();
+  try {
+    const status = await api.getConfigStatus();
+    renderConfig(status);
+    const ready = status.handle.installed && status.wechatPath;
+    document.getElementById('btnNew').disabled = !ready;
+    document.getElementById('btnSave').disabled = !ready;
+    document.getElementById('searchInput').disabled = !ready;
+    if (ready) {
+      try {
+        allAccounts = await api.getWechatList() || [];
+        renderAccounts(allAccounts);
+      } catch (e) {
+        showError('获取账号列表失败: ' + e.message);
         renderAccounts([]);
       }
-    } catch (e) {
-      showError('加载失败: ' + e.message);
-    }
-  }
-
-  // ===== 渲染配置 =====
-  function renderConfig(status) {
-    // handle.exe
-    const hStatus = document.getElementById('handleStatus');
-    const hPath = document.getElementById('handlePath');
-    const hActions = document.getElementById('handleActions');
-    if (status.handle.installed) {
-      hStatus.innerHTML = `<span class="badge badge-ok">✓ 已安装</span>`;
-      hPath.textContent = status.handle.path;
-      hActions.innerHTML = `<button class="btn btn-ghost btn-sm" onclick="handleOpenHandle()">📂 打开</button> <button class="btn btn-ghost btn-sm" onclick="handleDownload()">重新下载</button>`;
     } else {
-      hStatus.innerHTML = `<span class="badge badge-warn">✕ 未安装</span>`;
-      hPath.textContent = '';
-      hActions.innerHTML = `<button class="btn btn-primary btn-sm" onclick="handleDownload()">下载 handle.exe</button>`;
+      renderAccounts([]);
     }
-
-    // 路径
-    const pStatus = document.getElementById('pathStatus');
-    const pText = document.getElementById('pathText');
-    const pActions = document.getElementById('pathActions');
-    if (status.wechatPath) {
-      pStatus.innerHTML = `<span class="badge badge-ok">✓ 已设置</span>`;
-      pText.textContent = status.wechatPath;
-      pActions.innerHTML = `<button class="btn btn-ghost btn-sm" onclick="handleOpenFolder()">📂 打开</button> <button class="btn btn-ghost btn-sm" onclick="handleSetPath()">设置</button>`;
-    } else {
-      pStatus.innerHTML = `<span class="badge badge-warn">✕ 未设置</span>`;
-      pText.textContent = '';
-      pActions.innerHTML = `<button class="btn btn-primary btn-sm" onclick="handleSetPath()">设置文件夹</button>`;
-    }
+  } catch (e) {
+    showError('加载失败: ' + e.message);
   }
+}
 
-  // ===== 渲染账号列表 =====
-  function renderAccounts(accounts) {
-    displayAccounts = accounts;
-    const container = document.getElementById('accountList');
-    document.getElementById('accountCount').textContent = accounts.length + '/' + allAccounts.length;
-
-    if (!accounts.length) {
-      const ready = !document.getElementById('btnNew').disabled;
-      container.innerHTML = `
-        <div class="empty">
-          <div class="empty-icon">${ready ? '📭' : '⚙️'}</div>
-          <div class="empty-title">${ready ? '暂无已保存的账号' : '请先完成配置'}</div>
-          <div class="empty-desc">${
-            ready
-              ? '点击「新建多开」启动微信，登录后点击「保存当前登录」'
-              : '请下载 handle.exe 并设置微信文档路径'
-          }</div>
-        </div>`;
-      return;
-    }
-
-    const isSearching = !!document.getElementById('searchInput').value.trim();
-    container.innerHTML = accounts.map((a, i) => {
-      const online = a.isLogin;
-      const name = a.name || a.id;
-      return `
-        <div class="account-card" ${isSearching ? '' : 'draggable="true"'}
-             ${isSearching ? '' : `ondragstart="onDragStart(event,${i})"`}
-             ondragover="onDragOver(event)"
-             ondragenter="onDragEnter(event)"
-             ondragleave="onDragLeave(event)"
-             ondrop="onDrop(event,${i})">
-          <img class="account-avatar" src="${a.logo || './logo.png'}" onerror="this.src='./logo.png'" draggable="false">
-          <div class="account-info">
-            <div class="account-name">
-              ${escHtml(name)}
-              <span class="status-dot ${online ? 'status-online' : 'status-offline'}"></span>
-              <span class="status-text ${online ? 'online' : 'offline'}">${online ? '在线' : '离线'}</span>
-            </div>
-            <div class="account-id">${escHtml(a.id)}</div>
-          </div>
-          <div class="account-actions">
-            <button class="btn btn-primary btn-sm" onclick="handleStart(${i})" title="启动此账号">启动</button>
-            <button class="btn btn-ghost btn-sm" onclick="handleMove(${i},-1)" title="上移" ${i === 0 ? 'disabled style="opacity:0.3"' : ''}>↑</button>
-            <button class="btn btn-ghost btn-sm" onclick="handleMove(${i},1)" title="下移" ${i === accounts.length - 1 ? 'disabled style="opacity:0.3"' : ''}>↓</button>
-            <button class="btn btn-danger btn-sm" onclick="handleDelete(${i})" title="删除">🗑</button>
-          </div>
-        </div>`;
-    }).join('');
-  }
-
-  function escHtml(s) {
-    const d = document.createElement('div');
-    d.textContent = s;
-    return d.innerHTML;
-  }
-
-  // ===== 搜索过滤 =====
-  function filterAccounts(kw) {
-    const k = kw.trim().toLowerCase();
-    if (!k) return renderAccounts(allAccounts);
-    renderAccounts(allAccounts.filter(a =>
-      (a.name || '').toLowerCase().includes(k) ||
-      (a.id || '').toLowerCase().includes(k)
-    ));
-    // 搜索时禁用拖拽提示
-    document.querySelectorAll('.account-card').forEach(c => c.style.cursor = k ? 'default' : '');
-  }
-
-  // ===== 拖拽排序 =====
-  let dragIdx = null;
-
-  function onDragStart(e, i) {
-    dragIdx = i;
-    e.dataTransfer.effectAllowed = 'move';
-    e.target.style.opacity = '0.4';
-  }
-
-  function onDragOver(e) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  }
-
-  function onDragEnter(e) {
-    e.currentTarget.classList.add('drag-over');
-  }
-
-  function onDragLeave(e) {
-    e.currentTarget.classList.remove('drag-over');
-  }
-
-  function onDrop(e, targetIdx) {
-    e.preventDefault();
-    e.currentTarget.classList.remove('drag-over');
-    if (dragIdx !== null && dragIdx !== targetIdx && !document.getElementById('searchInput').value.trim()) {
-      const item = allAccounts.splice(dragIdx, 1)[0];
-      allAccounts.splice(targetIdx, 0, item);
-      renderAccounts(allAccounts);
-      persistOrder();
-    }
-    dragIdx = null;
-    document.querySelectorAll('.account-card').forEach(c => c.style.opacity = '1');
-  }
-
-  function persistOrder() {
-    const order = allAccounts.map(a => a.id);
-    window.saveAccountOrder(order);
-  }
-
-  // ===== 操作 =====
-  async function handleDownload() {
-    const wrap = document.getElementById('handleProgress');
-    const bar = document.getElementById('handleProgressBar');
-    const text = document.getElementById('handleProgressText');
-
-    wrap.classList.add('show');
-    text.classList.add('show');
-    bar.style.width = '0%';
-    text.textContent = '下载中... 0%';
-
-    window.onDownloadProgress = (pct) => {
-      bar.style.width = pct + '%';
-      text.textContent = pct >= 100 ? '解压中...' : '下载中... ' + pct + '%';
+function renderConfig(status) {
+  const hStatus = document.getElementById('handleStatus');
+  const hPath = document.getElementById('handlePath');
+  const hActions = document.getElementById('handleActions');
+  if (status.handle.installed) {
+    hStatus.innerHTML = '<span class="badge badge-ok">✓ 已安装</span>';
+    hPath.textContent = status.handle.path;
+    hActions.innerHTML = '<button class="btn btn-ghost btn-sm" id="btnOpenHandle">📂 打开</button> <button class="btn btn-ghost btn-sm" id="btnReDownload">重新下载</button>';
+    document.getElementById('btnOpenHandle').onclick = () => {
+      const dir = status.handle.path.substring(0, status.handle.path.lastIndexOf('\\'));
+      api.openFolder(dir);
     };
-
-    try {
-      await window.rpcDownloadHandle();
-      text.textContent = '下载完成 ✓';
-      toast('下载成功 ✓');
-      setTimeout(() => {
-        wrap.classList.remove('show');
-        text.classList.remove('show');
-      }, 1500);
-      loadDashboard();
-    } catch (e) {
-      text.textContent = '下载失败';
-      toast('下载失败: ' + e.message, true, 3000);
-      setTimeout(() => {
-        wrap.classList.remove('show');
-        text.classList.remove('show');
-      }, 2000);
-    } finally {
-      window.onDownloadProgress = null;
-    }
+    document.getElementById('btnReDownload').onclick = handleDownload;
+  } else {
+    hStatus.innerHTML = '<span class="badge badge-warn">✕ 未安装</span>';
+    hPath.textContent = '';
+    hActions.innerHTML = '<button class="btn btn-primary btn-sm" id="btnDownload">下载 handle.exe</button>';
+    document.getElementById('btnDownload').onclick = handleDownload;
   }
 
-  async function handleOpenHandle() {
-    try {
-      const status = await window.getConfigStatus();
-      if (status.handle.path) {
-        // 打开 handle.exe 所在文件夹
-        const dir = status.handle.path.substring(0, status.handle.path.lastIndexOf('\\'));
-        utools.shellOpenPath(dir);
-      }
-    } catch (e) {
-      toast('打开失败', true);
-    }
+  const pStatus = document.getElementById('pathStatus');
+  const pText = document.getElementById('pathText');
+  const pActions = document.getElementById('pathActions');
+  if (status.wechatPath) {
+    pStatus.innerHTML = '<span class="badge badge-ok">✓ 已设置</span>';
+    pText.textContent = status.wechatPath;
+    pActions.innerHTML = '<button class="btn btn-ghost btn-sm" id="btnOpenPath">📂 打开</button> <button class="btn btn-ghost btn-sm" id="btnSetPath">设置</button>';
+    document.getElementById('btnOpenPath').onclick = () => api.openFolder(status.wechatPath);
+    document.getElementById('btnSetPath').onclick = handleSetPath;
+  } else {
+    pStatus.innerHTML = '<span class="badge badge-warn">✕ 未设置</span>';
+    pText.textContent = '';
+    pActions.innerHTML = '<button class="btn btn-primary btn-sm" id="btnSetPath">设置文件夹</button>';
+    document.getElementById('btnSetPath').onclick = handleSetPath;
+  }
+}
+
+function renderAccounts(accounts) {
+  displayAccounts = accounts;
+  const container = document.getElementById('accountList');
+  document.getElementById('accountCount').textContent = accounts.length + '/' + allAccounts.length;
+
+  if (!accounts.length) {
+    const ready = !document.getElementById('btnNew').disabled;
+    container.innerHTML = '<div class="empty"><div class="empty-icon">' + (ready ? '📭' : '⚙️') + '</div><div class="empty-title">' + (ready ? '暂无已保存的账号' : '请先完成配置') + '</div><div class="empty-desc">' + (ready ? '点击「新建多开」启动微信，登录后点击「保存当前登录」' : '请下载 handle.exe 并设置微信文档路径') + '</div></div>';
+    return;
   }
 
-  function handleSetPath() {
-    const result = utools.showOpenDialog({
-      title: '选择微信文档文件夹 (xwechat_files)',
-      properties: ['openDirectory', 'createDirectory']
-    });
-    if (!result || !result.length) return;
-    const selectedPath = result[0];
+  container.innerHTML = accounts.map((a, i) => {
+    const online = a.isLogin;
+    const name = a.name || a.id;
+    return '<div class="account-card" draggable="true" data-idx="' + i + '">' +
+      '<img class="account-avatar" src="' + (a.logo || './logo.png') + '" onerror="this.src=\'./logo.png\'" draggable="false">' +
+      '<div class="account-info"><div class="account-name">' + escHtml(name) +
+      ' <span class="status-dot ' + (online ? 'status-online' : 'status-offline') + '"></span>' +
+      '<span class="status-text ' + (online ? 'online' : 'offline') + '">' + (online ? '在线' : '离线') + '</span></div>' +
+      '<div class="account-id">' + escHtml(a.id) + '</div></div>' +
+      '<div class="account-actions">' +
+      '<button class="btn btn-primary btn-sm" data-action="start" data-idx="' + i + '">启动</button>' +
+      '<button class="btn btn-ghost btn-sm" data-action="up" data-idx="' + i + '" ' + (i === 0 ? 'disabled' : '') + '>↑</button>' +
+      '<button class="btn btn-ghost btn-sm" data-action="down" data-idx="' + i + '" ' + (i === accounts.length - 1 ? 'disabled' : '') + '>↓</button>' +
+      '<button class="btn btn-danger btn-sm" data-action="delete" data-idx="' + i + '">🗑</button>' +
+      '</div></div>';
+  }).join('');
+}
 
-    // 通过 preload 中间层校验并保存
-    const ret = window.setWechatFilePath(selectedPath);
-    if (ret.success) {
-      toast('路径已更新 ✓');
-      loadDashboard();
-    } else {
-      toast(ret.message, true, 4000);
-    }
-  }
+// ===== 事件委托 =====
+document.getElementById('accountList').addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-action]');
+  if (!btn) return;
+  const action = btn.dataset.action;
+  const i = parseInt(btn.dataset.idx);
+  const a = displayAccounts[i];
 
-  function handleOpenFolder() {
-    const p = document.getElementById('pathText').textContent;
-    if (p) window.openFolder(p);
-  }
-
-  async function handleNewWechat() {
-    try {
-      await window.startWechat(null);
-      toast('微信已启动，请登录');
-    } catch (e) {
-      toast('启动失败: ' + e.message, true, 3000);
-    }
-  }
-
-  async function handleSaveCurrent() {
-    try {
-      const data = await window.saveWechat();
-      toast('保存成功: ' + (data.name || data.id));
-      loadDashboard();
-    } catch (e) {
-      toast('保存失败: ' + e.message, true, 3000);
-    }
-  }
-
-  async function handleStart(i) {
-    try {
-      await window.startWechat(displayAccounts[i]);
-      toast('已启动');
-    } catch (e) {
-      toast('启动失败: ' + e.message, true, 3000);
-    }
-  }
-
-  async function handleDelete(i) {
-    const a = displayAccounts[i];
+  if (action === 'start') {
+    try { await api.startWechat(a); toast('已启动'); }
+    catch (e) { toast('启动失败: ' + e.message, true, 3000); }
+  } else if (action === 'delete') {
     const name = a.name || a.id;
     if (!confirm('确定删除「' + name + '」？\n此操作不可恢复。')) return;
-    try {
-      window.deleteWechat(a);
-      toast('已删除');
-      loadDashboard();
-    } catch (e) {
-      toast('删除失败: ' + e.message, true, 3000);
-    }
-  }
-
-  function handleMove(i, dir) {
-    // 搜索时不支持排序
-    if (document.getElementById('searchInput').value.trim()) {
-      toast('请清除搜索后再排序', false, 1500);
-      return;
-    }
+    try { await api.deleteWechat(a); toast('已删除'); loadDashboard(); }
+    catch (e) { toast('删除失败: ' + e.message, true, 3000); }
+  } else if (action === 'up' || action === 'down') {
+    const dir = action === 'up' ? -1 : 1;
     const j = i + dir;
     if (j < 0 || j >= allAccounts.length) return;
     [allAccounts[i], allAccounts[j]] = [allAccounts[j], allAccounts[i]];
     renderAccounts(allAccounts);
-    persistOrder();
+    api.saveAccountOrder(allAccounts.map(a => a.id));
   }
+});
 
-  // ===== 启动 =====
-  loadDashboard();
+// ===== 拖拽排序 =====
+let dragIdx = null;
+document.getElementById('accountList').addEventListener('dragstart', (e) => {
+  const card = e.target.closest('.account-card');
+  if (!card) return;
+  dragIdx = parseInt(card.dataset.idx);
+  e.dataTransfer.effectAllowed = 'move';
+  card.style.opacity = '0.4';
+});
+document.getElementById('accountList').addEventListener('dragover', (e) => { e.preventDefault(); });
+document.getElementById('accountList').addEventListener('dragenter', (e) => {
+  const card = e.target.closest('.account-card');
+  if (card) card.classList.add('drag-over');
+});
+document.getElementById('accountList').addEventListener('dragleave', (e) => {
+  const card = e.target.closest('.account-card');
+  if (card) card.classList.remove('drag-over');
+});
+document.getElementById('accountList').addEventListener('drop', (e) => {
+  e.preventDefault();
+  const card = e.target.closest('.account-card');
+  if (!card) return;
+  card.classList.remove('drag-over');
+  const targetIdx = parseInt(card.dataset.idx);
+  if (dragIdx !== null && dragIdx !== targetIdx) {
+    const item = allAccounts.splice(dragIdx, 1)[0];
+    allAccounts.splice(targetIdx, 0, item);
+    renderAccounts(allAccounts);
+    api.saveAccountOrder(allAccounts.map(a => a.id));
+  }
+  dragIdx = null;
+  document.querySelectorAll('.account-card').forEach(c => c.style.opacity = '1');
+});
+
+// ===== 搜索 =====
+document.getElementById('searchInput').addEventListener('input', (e) => {
+  const k = e.target.value.trim().toLowerCase();
+  if (!k) return renderAccounts(allAccounts);
+  renderAccounts(allAccounts.filter(a =>
+    (a.name || '').toLowerCase().includes(k) || (a.id || '').toLowerCase().includes(k)
+  ));
+});
+
+// ===== 操作按钮 =====
+async function handleDownload() {
+  const wrap = document.getElementById('handleProgress');
+  const bar = document.getElementById('handleProgressBar');
+  const text = document.getElementById('handleProgressText');
+  wrap.classList.add('show');
+  text.classList.add('show');
+  bar.style.width = '0%';
+  text.textContent = '下载中...';
+  try {
+    await api.downloadHandle();
+    text.textContent = '下载完成 ✓';
+    toast('下载成功 ✓');
+    setTimeout(() => { wrap.classList.remove('show'); text.classList.remove('show'); }, 1500);
+    loadDashboard();
+  } catch (e) {
+    text.textContent = '下载失败';
+    toast('下载失败: ' + e.message, true, 3000);
+    setTimeout(() => { wrap.classList.remove('show'); text.classList.remove('show'); }, 2000);
+  }
+}
+
+async function handleSetPath() {
+  const dirPath = await api.selectDirectory();
+  if (!dirPath) return;
+  const ret = await api.setWechatFilePath(dirPath);
+  if (ret.success) { toast('路径已更新 ✓'); loadDashboard(); }
+  else { toast(ret.message, true, 4000); }
+}
+
+document.getElementById('btnNew').addEventListener('click', async () => {
+  try { await api.startWechat(null); toast('微信已启动，请登录'); }
+  catch (e) { toast('启动失败: ' + e.message, true, 3000); }
+});
+
+document.getElementById('btnSave').addEventListener('click', async () => {
+  try { const data = await api.saveWechat(); toast('保存成功: ' + (data.name || data.id)); loadDashboard(); }
+  catch (e) { toast('保存失败: ' + e.message, true, 3000); }
+});
+
+document.getElementById('btnRefresh').addEventListener('click', loadDashboard);
+
+// ===== 启动 =====
+loadDashboard();
 </script>
 </body>
 </html>

@@ -1,0 +1,54 @@
+{
+  "name": "win-wechat-exe",
+  "version": "1.0.0",
+  "description": "微信多开免登录工具 — 独立 Windows 应用",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win",
+    "build:dir": "electron-builder --win --dir"
+  },
+  "author": "luckey-ke",
+  "license": "MIT",
+  "dependencies": {
+    "adm-zip": "^0.5.16",
+    "iconv-lite": "^0.6.2",
+    "node-fetch": "^2.7.0"
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId": "com.luckeyke.wechat-multi",
+    "productName": "微信多开助手",
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "微信多开助手"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "node_modules/**/*"
+    ],
+    "directories": {
+      "output": "dist"
+    }
+  }
+}
