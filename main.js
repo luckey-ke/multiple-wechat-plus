@@ -180,7 +180,7 @@ function releaseFileLock(filePath) {
 }
 
 // 安全删除文件（带重试），处理 Windows 文件锁定
-async function safeUnlink(filePath, retries = 3, delayMs = 500) {
+async function safeUnlink(filePath, retries = 2, delayMs = 200) {
     for (let i = 0; i < retries; i++) {
         try {
             if (fs.existsSync(filePath)) fs.rmSync(filePath, { force: true });

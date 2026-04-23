@@ -503,8 +503,12 @@ document.getElementById('accountList').addEventListener('click', async (e) => {
   const a = displayAccounts[i];
 
   if (action === 'start') {
+    btn.disabled = true;
+    const origText = btn.textContent;
+    btn.textContent = '⏳ 启动中';
     try { await api.startWechat(a); toast('已启动'); }
     catch (e) { toast('启动失败: ' + e.message, true, 3000); }
+    finally { btn.disabled = false; btn.textContent = origText; }
   } else if (action === 'delete') {
     const name = a.name || a.id;
     if (!confirm('确定删除「' + name + '」？\n此操作不可恢复。')) return;
@@ -594,8 +598,14 @@ async function handleSetPath() {
 }
 
 document.getElementById('btnNew').addEventListener('click', async () => {
+  const btn = document.getElementById('btnNew');
+  if (btn.disabled) return;
+  const origText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '⏳ 正在启动中...';
   try { await api.startWechat(null); toast('微信已启动，请登录'); }
   catch (e) { toast('启动失败: ' + e.message, true, 3000); }
+  finally { btn.disabled = false; btn.textContent = origText; }
 });
 
 document.getElementById('btnSave').addEventListener('click', async () => {
