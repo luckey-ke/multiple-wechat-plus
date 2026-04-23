@@ -366,7 +366,7 @@
   </div>
 
 <script>
-const api = window.api;
+const api = window.api || {};
 let allAccounts = [];
 let displayAccounts = [];
 
@@ -416,6 +416,7 @@ async function loadDashboard() {
     }
   } catch (e) {
     showError('加载失败: ' + e.message);
+    renderAccounts([]);
   }
 }
 
