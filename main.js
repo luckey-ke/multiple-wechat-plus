@@ -179,6 +179,21 @@ function releaseFileLock(filePath) {
     });
 }
 
+// 安全删除文件（带重试），处理 Windows 文件锁定
+async function safeUnlink(filePath, retries = 3, delayMs = 500) {
+    for (let i = 0; i < retries; i++) {
+        try {
+            if (fs.existsSync(filePath)) fs.rmSync(filePath, { force: true });
+            return true;
+        } catch (e) {
+            if (i < retries - 1) {
+                await new Promise(r => setTimeout(r, delayMs));
+            }
+        }
+    }
+    return false;
+}
+
 function downloadHandle() {
     return new Promise((resolve, reject) => {
         if (fs.existsSync(HANDLE_EXE_PATH)) return resolve('已存在');
@@ -324,8 +339,8 @@ ipcMain.handle('startWechat', async (_event, itemData) => {
 
         let copied = false;
         try {
-            if (fs.existsSync(configPath)) fs.rmSync(configPath, { force: true });
-            if (fs.existsSync(crcPath)) fs.rmSync(crcPath, { force: true });
+            await safeUnlink(configPath);
+            await safeUnlink(crcPath);
             fs.copyFileSync(path.join(itemData.path, 'global_config'), configPath);
             fs.copyFileSync(path.join(itemData.path, 'global_config.crc'), crcPath);
             copied = true;
@@ -343,8 +358,10 @@ ipcMain.handle('startWechat', async (_event, itemData) => {
         }
     } else {
         const configPath = path.join(wechatFilePath, 'all_users', 'config', 'global_config');
-        fs.rmSync(configPath, { force: true });
-        fs.rmSync(configPath + '.crc', { force: true });
+        try { await releaseFileLock(configPath); } catch (e) {}
+        try { await releaseFileLock(configPath + '.crc'); } catch (e) {}
+        await safeUnlink(configPath);
+        await safeUnlink(configPath + '.crc');
     }
 
     try { await releaseMutex(); } catch (e) {}
