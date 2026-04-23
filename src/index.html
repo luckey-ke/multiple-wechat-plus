@@ -366,7 +366,7 @@
   </div>
 
 <script>
-var api = window.api || {};
+const { invoke } = window.__TAURI__.core;
 let allAccounts = [];
 let displayAccounts = [];
 
@@ -398,7 +398,7 @@ async function loadDashboard() {
   hideError();
   console.log('[loadDashboard] 开始');
   try {
-    const status = await api.getConfigStatus();
+    const status = await invoke('get_config_status');
     console.log('[loadDashboard] status:', JSON.stringify(status));
     renderConfig(status);
     const ready = status.handle.installed && status.wechatPath;
@@ -408,7 +408,7 @@ async function loadDashboard() {
     document.getElementById('searchInput').disabled = !ready;
     if (ready) {
       try {
-        allAccounts = await api.getWechatList() || [];
+        allAccounts = await invoke('get_wechat_list') || [];
         console.log('[loadDashboard] accounts:', allAccounts.length);
         renderAccounts(allAccounts);
       } catch (e) {
@@ -438,7 +438,7 @@ function renderConfig(status) {
     hActions.innerHTML = '<button class="btn btn-ghost btn-sm" id="btnOpenHandle">📂 打开</button> <button class="btn btn-ghost btn-sm" id="btnReDownload">重新下载</button>';
     document.getElementById('btnOpenHandle').onclick = () => {
       const dir = status.handle.path.substring(0, status.handle.path.lastIndexOf('\\'));
-      api.openFolder(dir);
+      invoke('open_folder', { path: dir });
     };
     document.getElementById('btnReDownload').onclick = handleDownload;
   } else {
@@ -455,7 +455,7 @@ function renderConfig(status) {
     pStatus.innerHTML = '<span class="badge badge-ok">✓ 已设置</span>';
     pText.textContent = status.wechatPath;
     pActions.innerHTML = '<button class="btn btn-ghost btn-sm" id="btnOpenPath">📂 打开</button> <button class="btn btn-ghost btn-sm" id="btnSetPath">设置</button>';
-    document.getElementById('btnOpenPath').onclick = () => api.openFolder(status.wechatPath);
+    document.getElementById('btnOpenPath').onclick = () => invoke('open_folder', { path: status.wechatPath });
     document.getElementById('btnSetPath').onclick = handleSetPath;
   } else {
     pStatus.innerHTML = '<span class="badge badge-warn">✕ 未设置</span>';
@@ -506,13 +506,13 @@ document.getElementById('accountList').addEventListener('click', async (e) => {
     btn.disabled = true;
     const origText = btn.textContent;
     btn.textContent = '⏳ 启动中';
-    try { await api.startWechat(a); toast('已启动'); }
+    try { await invoke('start_wechat', { itemData: a }); toast('已启动'); }
     catch (e) { toast('启动失败: ' + e.message, true, 3000); }
     finally { btn.disabled = false; btn.textContent = origText; }
   } else if (action === 'delete') {
     const name = a.name || a.id;
     if (!confirm('确定删除「' + name + '」？\n此操作不可恢复。')) return;
-    try { await api.deleteWechat(a); toast('已删除'); loadDashboard(); }
+    try { await invoke('delete_wechat', { itemData: a }); toast('已删除'); loadDashboard(); }
     catch (e) { toast('删除失败: ' + e.message, true, 3000); }
   } else if (action === 'up' || action === 'down') {
     const dir = action === 'up' ? -1 : 1;
@@ -520,7 +520,7 @@ document.getElementById('accountList').addEventListener('click', async (e) => {
     if (j < 0 || j >= allAccounts.length) return;
     [allAccounts[i], allAccounts[j]] = [allAccounts[j], allAccounts[i]];
     renderAccounts(allAccounts);
-    api.saveAccountOrder(allAccounts.map(a => a.id));
+    invoke('save_account_order', { order: allAccounts.map(a => a.id) });
   }
 });
 
@@ -552,7 +552,7 @@ document.getElementById('accountList').addEventListener('drop', (e) => {
     const item = allAccounts.splice(dragIdx, 1)[0];
     allAccounts.splice(targetIdx, 0, item);
     renderAccounts(allAccounts);
-    api.saveAccountOrder(allAccounts.map(a => a.id));
+    invoke('save_account_order', { order: allAccounts.map(a => a.id) });
   }
   dragIdx = null;
   document.querySelectorAll('.account-card').forEach(c => c.style.opacity = '1');
@@ -577,7 +577,7 @@ async function handleDownload() {
   bar.style.width = '0%';
   text.textContent = '下载中...';
   try {
-    await api.downloadHandle();
+    await invoke('download_handle');
     text.textContent = '下载完成 ✓';
     toast('下载成功 ✓');
     setTimeout(() => { wrap.classList.remove('show'); text.classList.remove('show'); }, 1500);
@@ -590,9 +590,9 @@ async function handleDownload() {
 }
 
 async function handleSetPath() {
-  const dirPath = await api.selectDirectory();
+  const dirPath = await window.__TAURI__.dialog.open({ directory: true, title: '选择微信文档文件夹 (xwechat_files)' });
   if (!dirPath) return;
-  const ret = await api.setWechatFilePath(dirPath);
+  const ret = await invoke('set_wechat_file_path', { dirPath: dirPath });
   if (ret.success) { toast('路径已更新 ✓'); loadDashboard(); }
   else { toast(ret.message, true, 4000); }
 }
@@ -603,7 +603,7 @@ document.getElementById('btnNew').addEventListener('click', async () => {
   const origText = btn.textContent;
   btn.disabled = true;
   btn.textContent = '⏳ 正在启动中...';
-  try { await api.startWechat(null); toast('微信已启动，请登录'); }
+  try { await invoke('start_wechat', { itemData: null }); toast('微信已启动，请登录'); }
   catch (e) { toast('启动失败: ' + e.message, true, 3000); }
   finally { btn.disabled = false; btn.textContent = origText; }
 });
@@ -614,7 +614,7 @@ document.getElementById('btnSave').addEventListener('click', async () => {
   const origText = btn.textContent;
   btn.disabled = true;
   btn.textContent = '⏳ 保存中...';
-  try { const data = await api.saveWechat(); toast('保存成功: ' + (data.name || data.id)); loadDashboard(); }
+  try { const data = await invoke('save_wechat'); toast('保存成功: ' + (data.name || data.id)); loadDashboard(); }
   catch (e) { toast('保存失败: ' + e.message, true, 3000); }
   finally { btn.disabled = false; btn.textContent = origText; }
 });
