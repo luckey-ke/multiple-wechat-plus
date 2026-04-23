@@ -609,8 +609,14 @@ document.getElementById('btnNew').addEventListener('click', async () => {
 });
 
 document.getElementById('btnSave').addEventListener('click', async () => {
+  const btn = document.getElementById('btnSave');
+  if (btn.disabled) return;
+  const origText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '⏳ 保存中...';
   try { const data = await api.saveWechat(); toast('保存成功: ' + (data.name || data.id)); loadDashboard(); }
   catch (e) { toast('保存失败: ' + e.message, true, 3000); }
+  finally { btn.disabled = false; btn.textContent = origText; }
 });
 
 document.getElementById('btnRefresh').addEventListener('click', loadDashboard);
