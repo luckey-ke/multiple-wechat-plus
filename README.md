@@ -40,7 +40,7 @@ npm run build:dir
 │   ├── index.html    # 渲染进程 UI
 │   └── logo.png      # 应用图标
 ├── build/
-│   └── icon.ico      # Windows 应用图标（需自行提供）
+│   └── icon.png      # 应用图标 256x256（electron-builder 自动转 .ico）
 └── package.json
 ```
 
@@ -53,7 +53,7 @@ npm run build:dir
 
 - 仅支持 Windows（依赖注册表、PowerShell、handle.exe）
 - 打包需在 Windows 环境执行 `npm run build`
-- `build/icon.ico` 需自行准备 256x256 的 .ico 图标文件
+- `build/icon.png` 已提供，如需自定义可替换同名文件
 
 ## 致谢
 

@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#07c160"/>
+      <stop offset="100%" style="stop-color:#06ad56"/>
+    </linearGradient>
+  </defs>
+  <!-- Background -->
+  <rect width="256" height="256" rx="48" fill="url(#bg)"/>
+  <!-- WeChat-like chat bubble -->
+  <g transform="translate(128,108)">
+    <ellipse cx="-28" cy="0" rx="36" ry="30" fill="#fff" opacity="0.95"/>
+    <ellipse cx="28" cy="0" rx="36" ry="30" fill="#fff" opacity="0.95"/>
+    <!-- Eyes -->
+    <circle cx="-28" cy="-4" r="4" fill="#07c160"/>
+    <circle cx="28" cy="-4" r="4" fill="#07c160"/>
+    <!-- Mouth -->
+    <path d="M-12 10 Q0 20 12 10" stroke="#07c160" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    <!-- Tail -->
+    <path d="M-10 26 L-26 42 L2 30" fill="#fff" opacity="0.95"/>
+  </g>
+  <!-- "×2" badge -->
+  <g transform="translate(196,56)">
+    <circle r="28" fill="#ff6b6b"/>
+    <text x="0" y="6" text-anchor="middle" font-family="Arial,sans-serif" font-size="22" font-weight="bold" fill="#fff">×2</text>
+  </g>
+</svg>
