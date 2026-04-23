@@ -1,14 +1,12 @@
 /**
- * dashboard-preload.js — 子窗口 preload
- * 复用 lib/ 模块，不再重复代码
+ * dashboard-preload.js — 仪表盘子窗口 preload
+ * 由 createBrowserWindow 加载，独立渲染上下文
+ * 需要自行初始化共享模块 + 挂载 RPC 函数
  */
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
 const iconv = require('iconv-lite');
 const { exec } = require('child_process');
-const fetch = require('node-fetch');
-const AdmZip = require('adm-zip');
 
 const {
     initShared,
@@ -16,10 +14,9 @@ const {
     setWechatFilePath,
     getAccountOrder,
     saveAccountOrder,
-    getHandleExePath,
 } = require('./lib/shared');
 
-const { downloadHandle, releaseFileLock, releaseMutex, HANDLE_EXE_PATH, WECHAT_MUTEX_NAME } = require('./lib/kill');
+const { downloadHandle, releaseFileLock, releaseMutex, HANDLE_EXE_PATH } = require('./lib/kill');
 
 // ========== 初始化 ==========
 initShared();
@@ -51,8 +48,6 @@ function isAccountLoggedIn(accountPath) {
     return false;
 }
 
-// ========== 按排序获取账号列表 ==========
-
 function getSortedAccounts() {
     const wechatFilePath = getWechatFilePath();
     if (!wechatFilePath) return [];
@@ -78,7 +73,6 @@ function getSortedAccounts() {
         };
     }
 
-    // 按保存顺序排序
     const order = getAccountOrder();
     const sorted = [];
     for (const id of order) {
@@ -87,7 +81,6 @@ function getSortedAccounts() {
             delete wxMap[id];
         }
     }
-    // 未排序的追加到末尾
     for (const id of Object.keys(wxMap)) {
         sorted.push(wxMap[id]);
     }
@@ -139,19 +132,9 @@ window.startWechat = async (itemData) => {
         const configPath = path.join(wechatFilePath, 'all_users', 'config', 'global_config');
         const crcPath = configPath + '.crc';
 
-        // 释放文件锁
-        try {
-            await releaseFileLock(configPath);
-        } catch (e) {
-            window.logger?.warn('释放 config 锁失败', e?.message);
-        }
-        try {
-            await releaseFileLock(crcPath);
-        } catch (e) {
-            window.logger?.warn('释放 crc 锁失败', e?.message);
-        }
+        try { await releaseFileLock(configPath); } catch (e) { /* ignore */ }
+        try { await releaseFileLock(crcPath); } catch (e) { /* ignore */ }
 
-        // 尝试直接复制
         let copied = false;
         try {
             if (fs.existsSync(configPath)) fs.rmSync(configPath, { force: true });
@@ -159,11 +142,8 @@ window.startWechat = async (itemData) => {
             fs.copyFileSync(path.join(itemData.path, 'global_config'), configPath);
             fs.copyFileSync(path.join(itemData.path, 'global_config.crc'), crcPath);
             copied = true;
-        } catch (e) {
-            window.logger?.error('直接复制失败', e?.message);
-        }
+        } catch (e) { /* fallback */ }
 
-        // fallback: rename 策略
         if (!copied) {
             try {
                 if (fs.existsSync(configPath)) fs.renameSync(configPath, configPath + '.bak');
@@ -176,19 +156,12 @@ window.startWechat = async (itemData) => {
         }
     } else {
         const configPath = path.join(wechatFilePath, 'all_users', 'config', 'global_config');
-        const crcPath = configPath + '.crc';
         fs.rmSync(configPath, { force: true });
-        fs.rmSync(crcPath, { force: true });
+        fs.rmSync(configPath + '.crc', { force: true });
     }
 
-    // 释放互斥锁
-    try {
-        await releaseMutex();
-    } catch (e) {
-        /* 没找到锁也继续 */
-    }
+    try { await releaseMutex(); } catch (e) { /* no lock is fine */ }
 
-    // 获取微信 EXE 路径
     let binPath = null;
     try {
         binPath = await new Promise((resolve, reject) => {
@@ -218,7 +191,6 @@ window.saveWechat = async () => {
     const loginPath = path.join(wechatFilePath, 'all_users', 'login');
     if (!fs.existsSync(loginPath)) throw new Error('微信登录目录不存在');
 
-    // 查找最新登录
     let latestTime = 0;
     let latestPath = null;
     for (const dir of fs.readdirSync(loginPath)) {
@@ -246,7 +218,6 @@ window.saveWechat = async () => {
     fs.copyFileSync(configSrc, path.join(wxidPath, 'global_config'));
     fs.copyFileSync(crcSrc, path.join(wxidPath, 'global_config.crc'));
 
-    // 复制头像
     const headImgDir = path.join(wechatFilePath, 'all_users', 'head_imgs', '0');
     if (fs.existsSync(headImgDir)) {
         let imgTime = 0, imgPath = null;

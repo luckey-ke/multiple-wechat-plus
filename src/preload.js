@@ -1,6 +1,6 @@
 /**
- * preload.js — 微信多开插件主入口（panel 模式）
- * 所有逻辑合并于此，仪表盘由 uTools 内嵌渲染
+ * preload.js — 微信多开插件主入口
+ * 合并原 dashboard-preload.js 逻辑，统一管理
  */
 require('./lib/utoolsHelp');
 
@@ -263,14 +263,54 @@ window.openFolder = (folderPath) => {
 window.getAccountOrder = getAccountOrder;
 window.saveAccountOrder = saveAccountOrder;
 
+// ========== 仪表盘窗口 ==========
+
+let dashboardWin = null;
+
+function openDashboard() {
+    if (dashboardWin) {
+        try {
+            dashboardWin.show();
+            return;
+        } catch (e) {
+            dashboardWin = null;
+        }
+    }
+
+    const preloadPath = path.join(__dirname, 'dashboard-preload.js');
+
+    dashboardWin = utools.createBrowserWindow(
+        'index.html',
+        {
+            width: 720,
+            height: 640,
+            minHeight: 400,
+            minWidth: 500,
+            title: '微信多开仪表盘',
+            resizable: true,
+            webPreferences: {
+                preload: preloadPath,
+                nodeIntegration: true,
+                contextIsolation: false,
+            },
+        },
+        () => {}
+    );
+
+    dashboardWin.on('closed', () => {
+        dashboardWin = null;
+    });
+}
+
 // ========== uTools 入口 ==========
 
 window.exports = {
     dashboard: {
-        mode: 'doc',
+        mode: 'none',
         args: {
             enter: () => {
-                // panel 模式下 uTools 自动渲染 index.html，无需额外操作
+                utools.hideMainWindow();
+                openDashboard();
             },
         },
     },
