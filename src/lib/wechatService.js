@@ -405,9 +405,8 @@ async function saveWechat() {
         isLogin: isAccountLoggedIn(path.join(wechatFilePath, wxid)),
     };
 
-    // 保存到本地存储
-    const { dbDevice } = require('./shared');
-    dbDevice.setItem('wx_' + wxData.id, JSON.stringify(wxData));
+    // 保存到本地存储（直接使用 window.dbDevice，避免 getter 在 require 时求值问题）
+    window.dbDevice.setItem('wx_' + wxData.id, JSON.stringify(wxData));
 
     return wxData;
 }

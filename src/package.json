@@ -3,9 +3,11 @@
   "version": "2.0.0",
   "description": "微信多开 - 支持多账号免登录快速切换",
   "main": "index.html",
-  "author": "utools-blowsnow",
+  "author": "yueke",
   "license": "MIT",
-  "platform": ["win32"],
+  "platform": [
+    "win32"
+  ],
   "scripts": {
     "dev": "echo \"uTools 插件无需构建，直接在 uTools 中加载 src 目录\""
   },
