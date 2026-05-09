@@ -1,3 +1,27 @@
+/**
+ * kill.js — handle.exe 操作与进程锁管理
+ *
+ * 提供微信多开的核心底层能力：
+ * - handle.exe 的下载与管理
+ * - 进程互斥锁的释放（允许启动多个微信实例）
+ * - 文件句柄锁的释放（允许替换配置文件）
+ *
+ * 技术原理：
+ * Windows 微信使用命名互斥体 XWeChat_App_Instance_Identity_Mutex_Name
+ * 来防止多实例运行。通过微软 Sysinternals 的 handle.exe 工具，
+ * 可以找到并关闭该互斥体，从而允许启动多个微信进程。
+ *
+ * @module kill
+ * @requires child_process
+ * @requires fs
+ * @requires path
+ * @requires os
+ * @requires node-fetch
+ * @requires adm-zip
+ * @requires ./error
+ * @requires ./logger
+ */
+
 const { exec } = require('child_process');
 const path = require('node:path');
 const os = require('node:os');
@@ -7,48 +31,54 @@ const AdmZip = require('adm-zip');
 const { GoConfigError } = require('./error');
 const { createLogger } = require('./logger');
 
-const logger = createLogger(null); // 输出到 stdout，由 window.logger 统一管理
+// ============================================================
+// 常量定义
+// ============================================================
 
+/** 模块内部日志实例 */
+const logger = createLogger(null);
+
+/** handle.exe 存储目录 */
 const basePath = path.join(os.homedir(), 'multiple_wechat');
 if (!fs.existsSync(basePath)) {
     fs.mkdirSync(basePath, { recursive: true });
 }
 
+/** handle.exe 完整路径 */
 const HANDLE_EXE_PATH = path.join(basePath, 'handle.exe');
+
+/** Handle.zip 临时路径 */
 const HANDLE_ZIP_PATH = path.join(basePath, 'Handle.zip');
+
+/** handle.exe 下载地址（微软 Sysinternals 官方） */
 const HANDLE_ZIP_URL = 'https://download.sysinternals.com/files/Handle.zip';
+
+/** 微信进程互斥体名称 */
 const WECHAT_MUTEX_NAME = 'XWeChat_App_Instance_Identity_Mutex_Name';
 
-/**
- * 关闭指定进程的指定句柄（提权执行）
- */
-function closeHandle(pid, handleId) {
-    return new Promise((resolve) => {
-        let powershell = 'powershell';
-        if (fs.existsSync('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe')) {
-            powershell = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
-        }
-        // 超时兜底：3秒后自动 resolve，避免 UI 卡死
-        const timer = setTimeout(() => {
-            logger.warn('closeHandle 超时，跳过等待');
-            resolve();
-        }, 3000);
-
-        const command = `${powershell} Start-Process "${HANDLE_EXE_PATH}" -ArgumentList @('-c','${handleId}','-p','${pid}','-y') -Verb RunAs -Wait`;
-        exec(command, (err, stdout) => {
-            clearTimeout(timer);
-            if (err) {
-                logger.error('closeHandle 失败', { pid, handleId, error: err.message });
-            } else {
-                logger.info('closeHandle 成功', { pid, handleId });
-            }
-            resolve(stdout);
-        });
-    });
-}
+// ============================================================
+// handle.exe 下载
+// ============================================================
 
 /**
  * 自动下载 handle.exe（如不存在）
+ *
+ * 下载流程：
+ * 1. 检查 handle.exe 是否已存在
+ * 2. 从微软 Sysinternals 官方下载 Handle.zip
+ * 3. 解压到 ~/multiple_wechat/ 目录
+ * 4. 删除临时 zip 文件
+ *
+ * @returns {Promise<string>} 下载结果提示
+ * @throws {Error} 下载失败或解压失败
+ *
+ * @example
+ * try {
+ *     const result = await downloadHandle();
+ *     console.log(result); // 'handle.exe 下载并解压成功！'
+ * } catch (e) {
+ *     console.error('下载失败:', e.message);
+ * }
  */
 function downloadHandle() {
     return new Promise((resolve, reject) => {
@@ -86,13 +116,73 @@ function downloadHandle() {
     });
 }
 
+// ============================================================
+// 句柄关闭（内部函数）
+// ============================================================
+
 /**
- * 查找并释放微信互斥锁
+ * 关闭指定进程的指定句柄（提权执行）
+ *
+ * 使用 PowerShell 的 Start-Process -Verb RunAs 提权执行 handle.exe，
+ * 以关闭目标进程的句柄。需要管理员权限。
+ *
+ * @param {string} pid - 目标进程 ID
+ * @param {string} handleId - 要关闭的句柄 ID
+ * @returns {Promise<void>}
+ *
+ * @private
+ */
+function closeHandle(pid, handleId) {
+    return new Promise((resolve) => {
+        // 定位 PowerShell 路径
+        let powershell = 'powershell';
+        if (fs.existsSync('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe')) {
+            powershell = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
+        }
+
+        // 超时兜底：3秒后自动 resolve，避免 UI 卡死
+        const timer = setTimeout(() => {
+            logger.warn('closeHandle 超时，跳过等待');
+            resolve();
+        }, 3000);
+
+        const command = `${powershell} Start-Process "${HANDLE_EXE_PATH}" -ArgumentList @('-c','${handleId}','-p','${pid}','-y') -Verb RunAs -Wait`;
+
+        exec(command, (err, stdout) => {
+            clearTimeout(timer);
+            if (err) {
+                logger.error('closeHandle 失败', { pid, handleId, error: err.message });
+            } else {
+                logger.info('closeHandle 成功', { pid, handleId });
+            }
+            resolve(stdout);
+        });
+    });
+}
+
+// ============================================================
+// 互斥锁释放
+// ============================================================
+
+/**
+ * 查找并释放微信进程互斥锁
+ *
+ * 微信使用命名互斥体 XWeChat_App_Instance_Identity_Mutex_Name 来防止多实例。
+ * 本函数通过 handle.exe 找到该互斥体的句柄并关闭它，从而允许启动多个微信。
+ *
+ * @returns {Promise<void>}
+ * @throws {Error} handle.exe 不存在
+ *
+ * @example
+ * // 在启动新微信实例之前调用
+ * await releaseMutex();
+ * // 现在可以启动新的微信实例了
  */
 function releaseMutex() {
     if (!fs.existsSync(HANDLE_EXE_PATH)) {
         throw new GoConfigError('handle.exe 不存在，请先下载');
     }
+
     return new Promise((resolve, reject) => {
         exec(
             `"${HANDLE_EXE_PATH}" -accepteula -p weixin -a ${WECHAT_MUTEX_NAME}`,
@@ -116,14 +206,35 @@ function releaseMutex() {
     });
 }
 
+// ============================================================
+// 文件锁释放
+// ============================================================
+
 /**
  * 释放指定文件的句柄锁
+ *
+ * 微信在运行时会锁定配置文件（global_config 等），
+ * 导致无法替换配置文件。本函数通过 handle.exe 找到并关闭这些文件锁。
+ *
  * @param {string} filePath - 被锁的文件路径
+ * @returns {Promise<void>}
+ * @throws {Error} handle.exe 不存在或查找文件锁失败
+ *
+ * @example
+ * const configPath = 'C:/.../all_users/config/global_config';
+ * try {
+ *     await releaseFileLock(configPath);
+ *     // 文件锁已释放，可以安全替换文件
+ *     fs.copyFileSync(newConfig, configPath);
+ * } catch (e) {
+ *     console.error('释放文件锁失败:', e.message);
+ * }
  */
 function releaseFileLock(filePath) {
     if (!fs.existsSync(HANDLE_EXE_PATH)) {
         throw new GoConfigError('handle.exe 不存在，请先下载');
     }
+
     return new Promise((resolve, reject) => {
         exec(`"${HANDLE_EXE_PATH}" -p weixin "${filePath}"`, (err, stdout, stderr) => {
             if (err) {
@@ -167,11 +278,18 @@ function releaseFileLock(filePath) {
     });
 }
 
+// ============================================================
+// 模块导出
+// ============================================================
+
 module.exports = {
+    // 核心功能
     releaseMutex,
     downloadHandle,
     releaseFileLock,
     closeHandle,
+
+    // 常量（供其他模块引用）
     HANDLE_EXE_PATH,
     WECHAT_MUTEX_NAME,
 };
