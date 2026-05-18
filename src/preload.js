@@ -22,6 +22,8 @@ const {
     startWechat,
     saveWechat,
     deleteWechat,
+    setManualNickname,
+    clearManualNickname,
 } = require('./lib/wechatService');
 
 // ============================================================
@@ -136,6 +138,21 @@ window.services = {
      * @param {Array<string>} order - 账号 ID 数组
      */
     saveAccountOrder,
+
+    /**
+     * 保存手动昵称
+     *
+     * @param {string} wxid - 账号 ID
+     * @param {string} name - 昵称，空字符串则清除
+     */
+    saveNickname: setManualNickname,
+
+    /**
+     * 清除手动昵称
+     *
+     * @param {string} wxid - 账号 ID
+     */
+    clearNickname: clearManualNickname,
 
     /**
      * 在文件管理器中打开指定路径

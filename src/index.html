@@ -48,6 +48,9 @@
     .account-avatar { width: 42px; height: 42px; border-radius: 50%; object-fit: cover; margin-right: 12px; background: #f0f2f5; flex-shrink: 0; }
     .account-info { flex: 1; min-width: 0; }
     .account-name { font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 6px; }
+    .name-display { cursor: pointer; border-bottom: 1px dashed transparent; transition: border-color 0.15s; }
+    .name-display:hover { border-bottom-color: #b2bec3; }
+    .name-edit-input { font-size: 13px; font-weight: 500; border: 1px solid #0984e3; border-radius: 4px; padding: 1px 6px; outline: none; width: 140px; background: #fff; }
     .account-id { font-size: 11px; color: #b2bec3; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .status-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
     .status-online { background: #00b894; box-shadow: 0 0 4px rgba(0,184,148,0.4); }
@@ -283,7 +286,7 @@ function renderAccounts(accounts) {
     const name = a.name || a.id;
     return '<div class="account-card" draggable="true" data-idx="' + i + '">' +
       '<img class="account-avatar" src="' + (a.logo || './logo.png') + '" onerror="this.src=\'./logo.png\'" draggable="false">' +
-      '<div class="account-info"><div class="account-name">' + escHtml(name) +
+      '<div class="account-info"><div class="account-name"><span class="name-display" data-idx="' + i + '">' + escHtml(name) + '</span>' +
       ' <span class="status-dot ' + (online ? 'status-online' : 'status-offline') + '"></span>' +
       '<span class="status-text ' + (online ? 'online' : 'offline') + '">' + (online ? '在线' : '离线') + '</span></div>' +
       '<div class="account-id">' + escHtml(a.id) + '</div></div>' +
@@ -296,8 +299,43 @@ function renderAccounts(accounts) {
   }).join('');
 }
 
+// ===== 行内编辑昵称 =====
+function startInlineEdit(el, account) {
+  var input = document.createElement('input');
+  input.className = 'name-edit-input';
+  input.value = account.name || account.id;
+  el.replaceWith(input);
+  input.focus();
+  input.select();
+
+  var saved = false;
+  function save() {
+    if (saved) return;
+    saved = true;
+    var newName = input.value.trim();
+    if (newName && newName !== account.name) {
+      S.saveNickname(account.id, newName);
+      account.name = newName;
+      toast('昵称已更新');
+    }
+    renderAccounts(displayAccounts);
+  }
+
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') save();
+    if (e.key === 'Escape') { saved = true; renderAccounts(displayAccounts); }
+  });
+  input.addEventListener('blur', save);
+}
+
 // ===== 事件委托 =====
 document.getElementById('accountList').addEventListener('click', async (e) => {
+  var nameEl = e.target.closest('.name-display');
+  if (nameEl) {
+    var idx = parseInt(nameEl.dataset.idx);
+    startInlineEdit(nameEl, displayAccounts[idx]);
+    return;
+  }
   const btn = e.target.closest('[data-action]');
   if (!btn) return;
   const action = btn.dataset.action;

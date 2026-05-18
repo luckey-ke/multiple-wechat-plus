@@ -25,6 +25,7 @@ const path = require('path');
 const iconv = require('iconv-lite');
 const { exec } = require('child_process');
 const { getWechatFilePath, setWechatFilePath } = require('./shared');
+var nicknameModule = require('./nickname');
 const { releaseMutex, releaseFileLock, HANDLE_EXE_PATH } = require('./kill');
 const { findDirName, findLatestFile, findLatestFileAll } = require('./file');
 
@@ -133,7 +134,7 @@ function getSortedAccounts() {
         wxMap[wxid] = {
             id: wxid,
             logo: path.join(wxidPath, 'logo.png'),
-            name: wxid,
+            name: nicknameModule.resolveNickname(wxid, wxidPath),
             path: wxidPath,
             accountPath: wxidRealPath,
             isLogin: wxidRealPath ? isAccountLoggedIn(wxidRealPath) : false,
@@ -400,7 +401,7 @@ async function saveWechat() {
     const wxData = {
         id: wxid,
         logo: path.join(wxidPath, 'logo.png'),
-        name: wxid,
+        name: nicknameModule.resolveNickname(wxid, wxidPath),
         path: wxidPath,
         isLogin: isAccountLoggedIn(path.join(wechatFilePath, wxid)),
     };
@@ -442,4 +443,6 @@ module.exports = {
     startWechat,
     saveWechat,
     deleteWechat,
+    setManualNickname: nicknameModule.setManualNickname,
+    clearManualNickname: nicknameModule.clearManualNickname,
 };
