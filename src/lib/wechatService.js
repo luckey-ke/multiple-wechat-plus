@@ -95,6 +95,31 @@ function isAccountLoggedIn(accountPath) {
 }
 
 /**
+ * 查找账号专属头像
+ *
+ * 优先从 head_imgs/0 下按 wxid 匹配的子目录取头像，
+ * 未找到则回退到共享目录的最新文件
+ *
+ * @param {string} wechatFilePath - 微信文档根目录
+ * @param {string} wxid - 账号 ID
+ * @returns {string|null} 头像文件路径，未找到返回 null
+ */
+function findAccountAvatar(wechatFilePath, wxid) {
+    var headImgDir = path.join(wechatFilePath, WECHAT_PATHS.HEAD_IMGS_DIR);
+    if (!fs.existsSync(headImgDir)) return null;
+
+    // 1. 在 head_imgs/0 下找 wxid 对应的子目录
+    var accountImgDir = findDirName(headImgDir, wxid);
+    if (accountImgDir) {
+        var img = findLatestFileAll(accountImgDir);
+        if (img) return img;
+    }
+
+    // 2. 回退：共享目录最新文件
+    return findLatestFileAll(headImgDir);
+}
+
+/**
  * 获取已排序的账号列表
  *
  * 排序逻辑：
@@ -388,13 +413,10 @@ async function saveWechat() {
     fs.copyFileSync(configSrc, path.join(wxidPath, 'global_config'));
     fs.copyFileSync(crcSrc, path.join(wxidPath, 'global_config.crc'));
 
-    // 复制最新头像
-    const headImgDir = path.join(wechatFilePath, WECHAT_PATHS.HEAD_IMGS_DIR);
-    if (fs.existsSync(headImgDir)) {
-        const imgPath = findLatestFileAll(headImgDir);
-        if (imgPath) {
-            fs.copyFileSync(imgPath, path.join(wxidPath, 'logo.png'));
-        }
+    // 复制账号头像
+    var avatarPath = findAccountAvatar(wechatFilePath, wxid);
+    if (avatarPath) {
+        fs.copyFileSync(avatarPath, path.join(wxidPath, 'logo.png'));
     }
 
     // 构建账号信息
