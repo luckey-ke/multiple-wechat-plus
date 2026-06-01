@@ -142,6 +142,51 @@ function resolveNickname(wxid, configDirPath) {
 }
 
 // ============================================================
+// 头像管理
+// ============================================================
+
+/**
+ * 解析账号头像
+ * 优先使用自定义头像，否则使用默认头像
+ *
+ * @param {string} wxid - 账号 ID
+ * @param {string} configDirPath - 账号配置目录路径
+ * @param {string} defaultLogo - 默认头像路径
+ * @returns {string} 头像路径
+ */
+function resolveAvatar(wxid, configDirPath, defaultLogo) {
+    var customPath = path.join(configDirPath, 'custom_logo.png');
+    if (fs.existsSync(customPath)) {
+        return customPath;
+    }
+    return defaultLogo;
+}
+
+/**
+ * 保存自定义头像
+ * 复制用户选择的图片到账号配置目录
+ *
+ * @param {string} wxid - 账号 ID
+ * @param {string} sourcePath - 源图片路径
+ * @param {string} configDirPath - 账号配置目录路径
+ */
+function setCustomAvatar(wxid, sourcePath, configDirPath) {
+    var destPath = path.join(configDirPath, 'custom_logo.png');
+    fs.copyFileSync(sourcePath, destPath);
+}
+
+/**
+ * 清除自定义头像，恢复默认
+ *
+ * @param {string} wxid - 账号 ID
+ * @param {string} configDirPath - 账号配置目录路径
+ */
+function clearCustomAvatar(wxid, configDirPath) {
+    var customPath = path.join(configDirPath, 'custom_logo.png');
+    try { fs.unlinkSync(customPath); } catch (e) { /* ignore */ }
+}
+
+// ============================================================
 // 模块导出
 // ============================================================
 
@@ -149,4 +194,7 @@ module.exports = {
     resolveNickname: resolveNickname,
     setManualNickname: setManualNickname,
     clearManualNickname: clearManualNickname,
+    resolveAvatar: resolveAvatar,
+    setCustomAvatar: setCustomAvatar,
+    clearCustomAvatar: clearCustomAvatar,
 };

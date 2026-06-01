@@ -12,8 +12,9 @@
  * @see plugin.json - 如使用独立窗口模式，需在 features 中指定
  */
 
-const { initShared, getAccountOrder, saveAccountOrder } = require('./lib/shared');
+const { initShared, getAccountOrder, saveAccountOrder, getWechatFilePath } = require('./lib/shared');
 const { downloadHandle, HANDLE_EXE_PATH } = require('./lib/kill');
+const path = require('path');
 const {
     getConfigStatus,
     getSortedAccounts,
@@ -22,6 +23,8 @@ const {
     deleteWechat,
     setManualNickname,
     clearManualNickname,
+    setCustomAvatar,
+    clearCustomAvatar,
 } = require('./lib/wechatService');
 
 // ============================================================
@@ -104,6 +107,25 @@ window.saveNickname = setManualNickname;
  * @param {string} wxid - 账号 ID
  */
 window.clearNickname = clearManualNickname;
+
+/**
+ * 保存自定义头像
+ * @param {string} wxid - 账号 ID
+ * @param {string} sourcePath - 源图片路径
+ */
+window.saveAvatar = function(wxid, sourcePath) {
+    var configDirPath = path.join(getWechatFilePath(), 'all_users', 'plugin_save_config', wxid);
+    setCustomAvatar(wxid, sourcePath, configDirPath);
+};
+
+/**
+ * 清除自定义头像，恢复默认
+ * @param {string} wxid - 账号 ID
+ */
+window.clearAvatar = function(wxid) {
+    var configDirPath = path.join(getWechatFilePath(), 'all_users', 'plugin_save_config', wxid);
+    clearCustomAvatar(wxid, configDirPath);
+};
 
 /**
  * 在文件管理器中打开指定路径

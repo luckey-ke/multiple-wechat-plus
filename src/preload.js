@@ -24,6 +24,8 @@ const {
     deleteWechat,
     setManualNickname,
     clearManualNickname,
+    setCustomAvatar,
+    clearCustomAvatar,
 } = require('./lib/wechatService');
 
 // ============================================================
@@ -153,6 +155,31 @@ window.services = {
      * @param {string} wxid - 账号 ID
      */
     clearNickname: clearManualNickname,
+
+    /**
+     * 保存自定义头像
+     *
+     * @param {string} wxid - 账号 ID
+     * @param {string} sourcePath - 源图片路径
+     */
+    saveAvatar(wxid, sourcePath) {
+        const wechatFilePath = getWechatFilePath();
+        if (!wechatFilePath) throw new Error('请先设置微信文档路径');
+        const configDirPath = require('path').join(wechatFilePath, 'all_users', 'plugin_save_config', wxid);
+        setCustomAvatar(wxid, sourcePath, configDirPath);
+    },
+
+    /**
+     * 清除自定义头像，恢复默认
+     *
+     * @param {string} wxid - 账号 ID
+     */
+    clearAvatar(wxid) {
+        const wechatFilePath = getWechatFilePath();
+        if (!wechatFilePath) throw new Error('请先设置微信文档路径');
+        const configDirPath = require('path').join(wechatFilePath, 'all_users', 'plugin_save_config', wxid);
+        clearCustomAvatar(wxid, configDirPath);
+    },
 
     /**
      * 在文件管理器中打开指定路径

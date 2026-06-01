@@ -45,7 +45,12 @@
     .account-card { display: flex; align-items: center; padding: 12px 14px; border: 1px solid #f0f2f5; border-radius: 10px; margin-bottom: 8px; transition: all 0.15s; }
     .account-card:last-child { margin-bottom: 0; }
     .account-card:hover { border-color: #dfe6e9; background: #fafbfc; }
-    .account-avatar { width: 42px; height: 42px; border-radius: 50%; object-fit: cover; margin-right: 12px; background: #f0f2f5; flex-shrink: 0; }
+    .avatar-wrap { position: relative; width: 42px; height: 42px; margin-right: 12px; flex-shrink: 0; cursor: pointer; }
+    .avatar-wrap .account-avatar { width: 42px; height: 42px; border-radius: 50%; object-fit: cover; background: #f0f2f5; display: block; }
+    .avatar-overlay { position: absolute; inset: 0; border-radius: 50%; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; font-size: 14px; opacity: 0; transition: opacity 0.15s; }
+    .avatar-wrap:hover .avatar-overlay { opacity: 1; }
+    .avatar-reset { position: absolute; top: -4px; right: -4px; width: 16px; height: 16px; border-radius: 50%; background: #d63031; color: #fff; font-size: 10px; border: none; cursor: pointer; display: none; align-items: center; justify-content: center; line-height: 1; }
+    .avatar-wrap:hover .avatar-reset { display: flex; }
     .account-info { flex: 1; min-width: 0; }
     .account-name { font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 6px; }
     .name-display { cursor: pointer; border-bottom: 1px dashed transparent; transition: border-color 0.15s; }
@@ -154,6 +159,7 @@
           <ul>
             <li><b>排序</b> — 拖拽账号卡片或点击 ↑↓ 按钮调整顺序</li>
             <li><b>编辑昵称</b> — 点击账号名称可自定义昵称，按 Enter 保存、Escape 取消</li>
+            <li><b>自定义头像</b> — 点击头像可上传自定义图片，hover 时点击 ✕ 可恢复默认头像</li>
             <li><b>搜索</b> — 在搜索框输入账号名或 ID 快速查找</li>
             <li><b>删除</b> — 点击 🗑 按钮删除已保存的账号（不可恢复）</li>
             <li><b>打开文件夹</b> — 点击 🂃 按钮可直接打开 handle.exe 或微信文档所在目录</li>
@@ -286,7 +292,7 @@ function renderAccounts(accounts) {
     const online = a.isLogin;
     const name = a.name || a.id;
     return '<div class="account-card" draggable="true" data-idx="' + i + '">' +
-      '<img class="account-avatar" src="' + (a.logo || './logo.png') + '" onerror="this.src=\'./logo.png\'" draggable="false">' +
+      '<div class="avatar-wrap" data-action="avatar" data-idx="' + i + '"><img class="account-avatar" src="' + (a.logo || './logo.png') + '" onerror="this.src=\'./logo.png\'" draggable="false"><div class="avatar-overlay">📷</div><button class="avatar-reset" data-action="reset-avatar" data-idx="' + i + '" title="恢复默认头像">✕</button></div>' +
       '<div class="account-info"><div class="account-name"><span class="name-display" data-idx="' + i + '">' + escHtml(name) + '</span>' +
       ' <span class="status-dot ' + (online ? 'status-online' : 'status-offline') + '"></span>' +
       '<span class="status-text ' + (online ? 'online' : 'offline') + '">' + (online ? '在线' : '离线') + '</span></div>' +
@@ -356,6 +362,15 @@ document.getElementById('accountList').addEventListener('click', async (e) => {
     if (!confirm('确定删除「' + name + '」？\n此操作不可恢复。')) return;
     try { S.deleteWechat(a); toast('已删除'); loadDashboard(); }
     catch (e) { toast('删除失败: ' + e.message, true, 3000); }
+  } else if (action === 'avatar') {
+    const result = utools.showOpenDialog({ title: '选择头像图片', filters: [{ name: '图片', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp'] }] });
+    if (!result || !result.length) return;
+    try { S.saveAvatar(a.id, result[0]); toast('头像已更新'); loadDashboard(); }
+    catch (e) { toast('头像更新失败: ' + e.message, true, 3000); }
+  } else if (action === 'reset-avatar') {
+    e.stopPropagation();
+    try { S.clearAvatar(a.id); toast('已恢复默认头像'); loadDashboard(); }
+    catch (e) { toast('还原失败: ' + e.message, true, 3000); }
   } else if (action === 'up' || action === 'down') {
     const dir = action === 'up' ? -1 : 1;
     const j = i + dir;

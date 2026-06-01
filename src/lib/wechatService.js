@@ -158,7 +158,7 @@ function getSortedAccounts() {
 
         wxMap[wxid] = {
             id: wxid,
-            logo: path.join(wxidPath, 'logo.png'),
+            logo: nicknameModule.resolveAvatar(wxid, wxidPath, path.join(wxidPath, 'logo.png')),
             name: nicknameModule.resolveNickname(wxid, wxidPath),
             path: wxidPath,
             accountPath: wxidRealPath,
@@ -467,4 +467,6 @@ module.exports = {
     deleteWechat,
     setManualNickname: nicknameModule.setManualNickname,
     clearManualNickname: nicknameModule.clearManualNickname,
+    setCustomAvatar: nicknameModule.setCustomAvatar,
+    clearCustomAvatar: nicknameModule.clearCustomAvatar,
 };
