@@ -314,10 +314,10 @@ function startInlineEdit(el, account) {
     if (saved) return;
     saved = true;
     var newName = input.value.trim();
-    if (newName && newName !== account.name) {
+    if (newName !== account.name) {
       S.saveNickname(account.id, newName);
-      account.name = newName;
-      toast('昵称已更新');
+      account.name = newName || account.id;
+      toast(newName ? '昵称已更新' : '已恢复默认名称');
     }
     renderAccounts(displayAccounts);
   }
