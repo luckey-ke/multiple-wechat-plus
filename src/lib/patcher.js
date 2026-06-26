@@ -266,6 +266,12 @@ function hasBackup(dllPath) {
     return fs.existsSync(dllPath + '.bak');
 }
 
+function backupDll(dllPath) {
+    if (!fs.existsSync(dllPath)) throw new Error('DLL 文件不存在');
+    fs.copyFileSync(dllPath, dllPath + '.bak');
+    return dllPath + '.bak';
+}
+
 function restoreDll(dllPath) {
     var bakPath = dllPath + '.bak';
     if (!fs.existsSync(bakPath)) return false;
@@ -282,5 +288,6 @@ module.exports = {
     isPatched: isPatched,
     patchDll: patchDll,
     hasBackup: hasBackup,
+    backupDll: backupDll,
     restoreDll: restoreDll,
 };

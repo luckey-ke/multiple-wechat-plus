@@ -173,6 +173,7 @@ function getStatus() {
             dllFile: dllFile, dllPath: dllPath, hasBackup: hasBackup,
             patchName: patchDef.name,
             message: enabled ? '防撤回已启用' : '防撤回未启用',
+            versionText: '当前版本：' + version + '（支持特征防撤回）',
         };
     }).catch(function(err) {
         return {
@@ -251,6 +252,41 @@ function disable() {
     });
 }
 
+/**
+ * 手动备份 DLL
+ *
+ * @returns {Promise<Object>} 操作结果
+ */
+function backup() {
+    return getWechatExeDir().then(function(exeDir) {
+        var version = detectWechatVersion(exeDir);
+        if (!version) return { success: false, message: '无法检测微信版本' };
+
+        var patchDef = patchDb.findPatch(version);
+        var baseDllFile = patchDef ? patchDef.dllFile : (version.indexOf('4.') === 0 ? 'Weixin.dll' : 'WeChatWin.dll');
+
+        var dllPath = findDllPath(exeDir, baseDllFile);
+        if (!dllPath) {
+            var altDll = baseDllFile === 'Weixin.dll' ? 'WeChatWin.dll' : 'Weixin.dll';
+            dllPath = findDllPath(exeDir, altDll);
+        }
+        if (!dllPath) return { success: false, message: '未找到微信 DLL 文件' };
+
+        if (patcher.hasBackup(dllPath)) {
+            return { success: true, message: '备份已存在' };
+        }
+
+        try {
+            patcher.backupDll(dllPath);
+            return { success: true, message: '备份成功' };
+        } catch (e) {
+            return { success: false, message: '备份失败: ' + e.message };
+        }
+    }).catch(function(err) {
+        return { success: false, message: err.message };
+    });
+}
+
 // ============================================================
 // 模块导出
 // ============================================================
@@ -259,5 +295,6 @@ module.exports = {
     getStatus: getStatus,
     enable: enable,
     disable: disable,
+    backup: backup,
     getWechatExeDir: getWechatExeDir,
 };

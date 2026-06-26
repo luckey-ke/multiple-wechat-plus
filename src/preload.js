@@ -210,6 +210,15 @@ window.services = {
     },
 
     /**
+     * 手动备份 DLL
+     *
+     * @returns {Promise<Object>} 操作结果
+     */
+    backupAntiRevoke() {
+        return antiRevoke.backup();
+    },
+
+    /**
      * 在文件管理器中打开指定路径
      *
      * @param {string} p - 文件或目录路径

@@ -163,10 +163,10 @@
 
           <h4><span class="step-num">4</span> 防撤回</h4>
           <ul>
-            <li>在「配置状态」区域可查看防撤回状态</li>
+            <li>在「配置状态」区域可查看微信版本和防撤回状态</li>
             <li>点击「启用防撤回」会对微信 DLL 打补丁（自动备份原文件）</li>
-            <li>点击「禁用」可恢复原 DLL 文件</li>
-            <li>支持 WeChat 3.9.x 和 4.0.x 版本</li>
+            <li>点击「备份」可手动备份原 DLL，点击「恢复原文件」可还原</li>
+            <li>支持 WeChat 4.0.x 及以上版本</li>
           </ul>
 
           <h4><span class="step-num">5</span> 其他操作</h4>
@@ -310,10 +310,10 @@ function loadAntiRevokeStatus() {
     }
     if (st.enabled) {
       rStatus.innerHTML = '<span class="badge badge-ok">✓ 已启用</span>';
-      rInfo.textContent = st.version + ' · ' + st.dllFile;
-      rActions.innerHTML = '<button class="btn btn-ghost btn-sm" id="btnRevokeDisable">禁用</button>';
+      rInfo.textContent = st.versionText || (st.version + ' · ' + st.dllFile);
+      rActions.innerHTML = '<button class="btn btn-ghost btn-sm" id="btnRevokeDisable">恢复原文件</button>';
       if (st.hasBackup) {
-        rActions.innerHTML += ' <button class="btn btn-ghost btn-sm" id="btnRevokeOpen">📂 打开</button>';
+        rActions.innerHTML += ' <button class="btn btn-ghost btn-sm" id="btnRevokeOpen">📂</button>';
       }
       document.getElementById('btnRevokeDisable').onclick = handleRevokeDisable;
       if (st.hasBackup && document.getElementById('btnRevokeOpen')) {
@@ -323,9 +323,20 @@ function loadAntiRevokeStatus() {
       }
     } else {
       rStatus.innerHTML = '<span class="badge badge-warn">未启用</span>';
-      rInfo.textContent = st.version + ' · ' + st.dllFile;
+      rInfo.textContent = st.versionText || (st.version + ' · ' + st.dllFile);
       rActions.innerHTML = '<button class="btn btn-primary btn-sm" id="btnRevokeEnable">启用防撤回</button>';
+      if (!st.hasBackup) {
+        rActions.innerHTML += ' <button class="btn btn-ghost btn-sm" id="btnRevokeBackup">备份</button>';
+      } else {
+        rActions.innerHTML += ' <button class="btn btn-ghost btn-sm" id="btnRevokeRestore">还原</button>';
+      }
       document.getElementById('btnRevokeEnable').onclick = handleRevokeEnable;
+      if (document.getElementById('btnRevokeBackup')) {
+        document.getElementById('btnRevokeBackup').onclick = handleRevokeBackup;
+      }
+      if (document.getElementById('btnRevokeRestore')) {
+        document.getElementById('btnRevokeRestore').onclick = handleRevokeDisable;
+      }
     }
   }).catch(function() {
     rStatus.innerHTML = '<span class="badge badge-warn">✕ 加载失败</span>';
@@ -351,7 +362,8 @@ async function handleRevokeEnable() {
 }
 
 async function handleRevokeDisable() {
-  const btn = document.getElementById('btnRevokeDisable');
+  const btn = document.getElementById('btnRevokeDisable') || document.getElementById('btnRevokeRestore');
+  if (!btn) return;
   btn.disabled = true;
   btn.textContent = '处理中...';
   try {
@@ -359,7 +371,20 @@ async function handleRevokeDisable() {
     if (result.success) { toast('已恢复原文件 ✓'); loadAntiRevokeStatus(); }
     else { toast(result.message, true, 3000); }
   } catch (e) { toast('操作失败: ' + e.message, true, 3000); }
-  finally { btn.disabled = false; btn.textContent = '禁用'; }
+  finally { btn.disabled = false; btn.textContent = '恢复原文件'; }
+}
+
+async function handleRevokeBackup() {
+  const btn = document.getElementById('btnRevokeBackup');
+  if (!btn) return;
+  btn.disabled = true;
+  btn.textContent = '备份中...';
+  try {
+    const result = await S.backupAntiRevoke();
+    if (result.success) { toast(result.message + ' ✓'); loadAntiRevokeStatus(); }
+    else { toast(result.message, true, 3000); }
+  } catch (e) { toast('操作失败: ' + e.message, true, 3000); }
+  finally { btn.disabled = false; btn.textContent = '备份'; }
 }
 
 function renderAccounts(accounts) {

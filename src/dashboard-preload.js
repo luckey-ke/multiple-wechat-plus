@@ -147,6 +147,12 @@ window.enableAntiRevoke = function() { return antiRevoke.enable(); };
 window.disableAntiRevoke = function() { return antiRevoke.disable(); };
 
 /**
+ * 手动备份 DLL
+ * @returns {Promise<Object>}
+ */
+window.backupAntiRevoke = function() { return antiRevoke.backup(); };
+
+/**
  * 在文件管理器中打开指定路径
  * @param {string} p - 文件或目录路径
  */
