@@ -14,6 +14,7 @@
 
 const { initShared, getAccountOrder, saveAccountOrder, getWechatFilePath } = require('./lib/shared');
 const { downloadHandle, HANDLE_EXE_PATH } = require('./lib/kill');
+const antiRevoke = require('./lib/antiRevoke');
 const path = require('path');
 const {
     getConfigStatus,
@@ -126,6 +127,24 @@ window.clearAvatar = function(wxid) {
     var configDirPath = path.join(getWechatFilePath(), 'all_users', 'plugin_save_config', wxid);
     clearCustomAvatar(wxid, configDirPath);
 };
+
+/**
+ * 获取防撤回状态
+ * @returns {Promise<Object>}
+ */
+window.getAntiRevokeStatus = function() { return antiRevoke.getStatus(); };
+
+/**
+ * 启用防撤回
+ * @returns {Promise<Object>}
+ */
+window.enableAntiRevoke = function() { return antiRevoke.enable(); };
+
+/**
+ * 禁用防撤回
+ * @returns {Promise<Object>}
+ */
+window.disableAntiRevoke = function() { return antiRevoke.disable(); };
 
 /**
  * 在文件管理器中打开指定路径

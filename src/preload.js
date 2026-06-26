@@ -16,6 +16,7 @@
 
 const { initShared, getWechatFilePath, setWechatFilePath, getAccountOrder, saveAccountOrder } = require('./lib/shared');
 const { downloadHandle, HANDLE_EXE_PATH } = require('./lib/kill');
+const antiRevoke = require('./lib/antiRevoke');
 const {
     getConfigStatus,
     getSortedAccounts,
@@ -179,6 +180,33 @@ window.services = {
         if (!wechatFilePath) throw new Error('请先设置微信文档路径');
         const configDirPath = require('path').join(wechatFilePath, 'all_users', 'plugin_save_config', wxid);
         clearCustomAvatar(wxid, configDirPath);
+    },
+
+    /**
+     * 获取防撤回状态
+     *
+     * @returns {Promise<Object>} 状态对象
+     */
+    getAntiRevokeStatus() {
+        return antiRevoke.getStatus();
+    },
+
+    /**
+     * 启用防撤回
+     *
+     * @returns {Promise<Object>} 操作结果
+     */
+    enableAntiRevoke() {
+        return antiRevoke.enable();
+    },
+
+    /**
+     * 禁用防撤回（恢复原 DLL）
+     *
+     * @returns {Promise<Object>} 操作结果
+     */
+    disableAntiRevoke() {
+        return antiRevoke.disable();
     },
 
     /**

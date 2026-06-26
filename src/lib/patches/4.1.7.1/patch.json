@@ -1,0 +1,13 @@
+{
+  "Name": "Weixin.dll",
+  "StartVersion": "4.1.7.1",
+  "EndVersion": "4.1.9.0",
+  "Source": "RevokeMsgPatcher",
+  "ReplacePatterns": [
+    {
+      "Search": [144, 72, 137, 134, 168, 1, 0, 0],
+      "Replace": [144, 72, 41, 134, 168, 1, 0, 0],
+      "Category": "防撤回"
+    }
+  ]
+}

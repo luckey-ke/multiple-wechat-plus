@@ -9,7 +9,7 @@
     body { font-family: -apple-system, "Microsoft YaHei", "PingFang SC", sans-serif; background: #f5f6fa; color: #2d3436; padding: 20px; min-height: 100vh; }
     .dashboard { max-width: 680px; margin: 0 auto; }
     h2.section-title { font-size: 14px; font-weight: 600; color: #636e72; margin-bottom: 10px; padding-left: 2px; }
-    .config-bar { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+    .config-bar { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 20px; }
     .config-card { background: #fff; border-radius: 12px; padding: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); display: flex; flex-direction: column; gap: 8px; }
     .config-card .card-label { font-size: 11px; color: #b2bec3; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
     .config-card .card-value { font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 6px; min-height: 20px; }
@@ -121,6 +121,12 @@
         <div class="card-path" id="pathText"></div>
         <div class="card-actions" id="pathActions"></div>
       </div>
+      <div class="config-card">
+        <div class="card-label">防撤回</div>
+        <div class="card-value" id="revokeStatus"><span class="loading" style="padding:0;font-size:12px"></span></div>
+        <div class="card-path" id="revokeInfo"></div>
+        <div class="card-actions" id="revokeActions"></div>
+      </div>
     </div>
     <h2 class="section-title">⚡ 快捷操作</h2>
     <div class="action-bar">
@@ -155,7 +161,15 @@
             <li>多开免登需要<b>按首次保存顺序</b>依次启动</li>
           </ul>
 
-          <h4><span class="step-num">4</span> 其他操作</h4>
+          <h4><span class="step-num">4</span> 防撤回</h4>
+          <ul>
+            <li>在「配置状态」区域可查看防撤回状态</li>
+            <li>点击「启用防撤回」会对微信 DLL 打补丁（自动备份原文件）</li>
+            <li>点击「禁用」可恢复原 DLL 文件</li>
+            <li>支持 WeChat 3.9.x 和 4.0.x 版本</li>
+          </ul>
+
+          <h4><span class="step-num">5</span> 其他操作</h4>
           <ul>
             <li><b>排序</b> — 拖拽账号卡片或点击 ↑↓ 按钮调整顺序</li>
             <li><b>编辑昵称</b> — 点击账号名称可自定义昵称，按 Enter 保存、Escape 取消</li>
@@ -275,6 +289,77 @@ function renderConfig(status) {
     pActions.innerHTML = '<button class="btn btn-primary btn-sm" id="btnSetPath">设置文件夹</button>';
     document.getElementById('btnSetPath').onclick = handleSetPath;
   }
+
+  // 防撤回状态（异步加载）
+  loadAntiRevokeStatus();
+}
+
+function loadAntiRevokeStatus() {
+  var rStatus = document.getElementById('revokeStatus');
+  var rInfo = document.getElementById('revokeInfo');
+  var rActions = document.getElementById('revokeActions');
+  rStatus.innerHTML = '<span class="loading" style="padding:0;font-size:12px"></span>';
+  rInfo.textContent = '';
+  rActions.innerHTML = '';
+
+  S.getAntiRevokeStatus().then(function(st) {
+    if (!st.available) {
+      rStatus.innerHTML = '<span class="badge badge-warn">✕ ' + escHtml(st.message) + '</span>';
+      rInfo.textContent = st.version ? 'v' + st.version : '';
+      return;
+    }
+    if (st.enabled) {
+      rStatus.innerHTML = '<span class="badge badge-ok">✓ 已启用</span>';
+      rInfo.textContent = st.version + ' · ' + st.dllFile;
+      rActions.innerHTML = '<button class="btn btn-ghost btn-sm" id="btnRevokeDisable">禁用</button>';
+      if (st.hasBackup) {
+        rActions.innerHTML += ' <button class="btn btn-ghost btn-sm" id="btnRevokeOpen">📂 打开</button>';
+      }
+      document.getElementById('btnRevokeDisable').onclick = handleRevokeDisable;
+      if (st.hasBackup && document.getElementById('btnRevokeOpen')) {
+        document.getElementById('btnRevokeOpen').onclick = function() {
+          S.openFolder(st.dllPath.substring(0, st.dllPath.lastIndexOf('\\')));
+        };
+      }
+    } else {
+      rStatus.innerHTML = '<span class="badge badge-warn">未启用</span>';
+      rInfo.textContent = st.version + ' · ' + st.dllFile;
+      rActions.innerHTML = '<button class="btn btn-primary btn-sm" id="btnRevokeEnable">启用防撤回</button>';
+      document.getElementById('btnRevokeEnable').onclick = handleRevokeEnable;
+    }
+  }).catch(function() {
+    rStatus.innerHTML = '<span class="badge badge-warn">✕ 加载失败</span>';
+  });
+}
+
+async function handleRevokeEnable() {
+  const btn = document.getElementById('btnRevokeEnable');
+  btn.disabled = true;
+  btn.textContent = '处理中...';
+  try {
+    const result = await S.enableAntiRevoke();
+    if (result.success) { toast(result.message || '防撤回已启用 ✓'); loadAntiRevokeStatus(); }
+    else {
+      var msg = result.message;
+      if (msg.indexOf('EBUSY') !== -1 || msg.indexOf('locked') !== -1) {
+        msg = 'DLL 被占用，请先关闭微信后再试';
+      }
+      toast(msg, true, 4000);
+    }
+  } catch (e) { toast('操作失败: ' + e.message, true, 3000); }
+  finally { btn.disabled = false; btn.textContent = '启用防撤回'; }
+}
+
+async function handleRevokeDisable() {
+  const btn = document.getElementById('btnRevokeDisable');
+  btn.disabled = true;
+  btn.textContent = '处理中...';
+  try {
+    const result = await S.disableAntiRevoke();
+    if (result.success) { toast('已恢复原文件 ✓'); loadAntiRevokeStatus(); }
+    else { toast(result.message, true, 3000); }
+  } catch (e) { toast('操作失败: ' + e.message, true, 3000); }
+  finally { btn.disabled = false; btn.textContent = '禁用'; }
 }
 
 function renderAccounts(accounts) {
