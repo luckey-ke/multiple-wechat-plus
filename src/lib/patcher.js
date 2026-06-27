@@ -280,6 +280,16 @@ function patchDll(dllPath, patches, options) {
         return { success: false, message: '写入失败', details: [] };
     }
 
+    // 写入后验证：重新读取文件确认补丁已生效
+    try {
+        var verifyBuf = fs.readFileSync(dllPath);
+        if (!isPatched(verifyBuf, patches)) {
+            return { success: false, message: 'DLL 被占用，请先关闭微信后再试', details: [] };
+        }
+    } catch (e) {
+        return { success: false, message: '验证失败: ' + e.message, details: [] };
+    }
+
     return { success: true, message: '补丁成功', details: changes.map(function(c) {
         return { name: c.name, position: c.position };
     }) };
