@@ -96,6 +96,9 @@
     .modal-body ul { padding-left: 18px; }
     .modal-body .step-num { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; background: #0984e3; color: #fff; font-size: 11px; font-weight: 600; flex-shrink: 0; }
     .modal-body .tip { background: #fff8e6; border-radius: 8px; padding: 10px 14px; margin-top: 12px; font-size: 11px; color: #b07000; }
+    .confirm-modal .modal-box { max-width: 360px; padding: 24px; text-align: center; }
+    .confirm-modal .modal-body { font-size: 13px; color: #636e72; margin-bottom: 20px; line-height: 1.6; }
+    .confirm-modal .confirm-actions { display: flex; gap: 10px; justify-content: center; }
   </style>
 </head>
 <body>
@@ -187,10 +190,22 @@
       </div>
     </div>
 
+    <!-- 删除确认弹框 -->
+    <div class="modal-overlay confirm-modal" id="confirmModal">
+      <div class="modal-box">
+        <div class="modal-title">⚠️ 确认删除</div>
+        <div class="modal-body" id="confirmText"></div>
+        <div class="confirm-actions">
+          <button class="btn btn-ghost" id="confirmCancel">取消</button>
+          <button class="btn btn-danger" id="confirmOk">删除</button>
+        </div>
+      </div>
+    </div>
+
     <div class="account-section">
       <div class="account-header">
         <div>
-          <span style="font-size:15px;font-weight:600">👥 微信账号</span>
+          <img src="./logo.png" style="width:18px;height:18px;border-radius:4px;vertical-align:middle;margin-right:4px"><span style="font-size:15px;font-weight:600">微信账号</span>
           <span class="account-count" id="accountCount">0</span>
           <span style="font-size:10px;color:#b2bec3;margin-left:6px">多开免登需要按首次保存顺序启动</span>
         </div>
@@ -242,6 +257,17 @@ function friendlyError(msg) {
     return '操作超时，请重试';
   }
   return msg;
+}
+
+function showConfirm(text) {
+  return new Promise(function(resolve) {
+    var modal = document.getElementById('confirmModal');
+    document.getElementById('confirmText').textContent = text;
+    modal.classList.add('show');
+    document.getElementById('confirmOk').onclick = function() { modal.classList.remove('show'); resolve(true); };
+    document.getElementById('confirmCancel').onclick = function() { modal.classList.remove('show'); resolve(false); };
+    modal.onclick = function(e) { if (e.target === modal) { modal.classList.remove('show'); resolve(false); } };
+  });
 }
 
 // ===== 加载仪表盘 =====
@@ -479,7 +505,8 @@ document.getElementById('accountList').addEventListener('click', async (e) => {
     finally { busy = false; btn.disabled = false; btn.textContent = '启动'; }
   } else if (action === 'delete') {
     const name = a.name || a.id;
-    if (!confirm('确定删除「' + name + '」？\n此操作不可恢复。')) return;
+    const confirmed = await showConfirm('确定删除「' + name + '」？此操作不可恢复。');
+    if (!confirmed) return;
     try { S.deleteWechat(a); toast('已删除'); loadDashboard(); }
     catch (e) { toast('删除失败: ' + e.message, true, 3000); }
   } else if (action === 'avatar') {
