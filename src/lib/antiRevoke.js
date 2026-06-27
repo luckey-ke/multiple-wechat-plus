@@ -167,11 +167,13 @@ function getStatus() {
 
         var enabled = patcher.isPatched(buf, patchDef.patches);
         var hasBackup = patcher.hasBackup(dllPath);
+        var needsElevation = patcher.isInProgramFiles(dllPath);
 
         return {
             available: true, enabled: enabled, version: version,
             dllFile: dllFile, dllPath: dllPath, hasBackup: hasBackup,
             patchName: patchDef.name,
+            needsElevation: needsElevation,
             message: enabled ? '防撤回已启用' : '防撤回未启用',
             versionText: '当前版本：' + version + '（支持特征防撤回）',
         };
@@ -242,11 +244,7 @@ function disable() {
             return { success: false, message: '未找到备份文件，无法恢复' };
         }
 
-        var restored = patcher.restoreDll(dllPath);
-        return {
-            success: restored,
-            message: restored ? '已恢复原文件' : '恢复失败',
-        };
+        return patcher.restoreDll(dllPath);
     }).catch(function(err) {
         return { success: false, message: err.message };
     });

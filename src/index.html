@@ -208,6 +208,7 @@ const S = window.services;
 let allAccounts = [];
 let displayAccounts = [];
 let busy = false;
+let revokeNeedsElevation = false;
 
 // ===== Toast =====
 function toast(msg, isError, duration) {
@@ -230,6 +231,17 @@ function escHtml(s) {
   const d = document.createElement('div');
   d.textContent = s;
   return d.innerHTML;
+}
+
+function friendlyError(msg) {
+  if (msg === 'uac_canceled') return '已取消管理员授权，操作未完成';
+  if (msg.indexOf('EBUSY') !== -1 || msg.indexOf('locked') !== -1 || msg.indexOf('EPERM') !== -1 || msg.indexOf('EACCES') !== -1 || msg.indexOf('operation not permitted') !== -1) {
+    return 'DLL 被占用，请先关闭微信后再试';
+  }
+  if (msg.indexOf('超时') !== -1 || msg.indexOf('timed out') !== -1) {
+    return '操作超时，请重试';
+  }
+  return msg;
 }
 
 // ===== 加载仪表盘 =====
@@ -304,6 +316,7 @@ function loadAntiRevokeStatus() {
   rActions.innerHTML = '';
 
   S.getAntiRevokeStatus().then(function(st) {
+    revokeNeedsElevation = st.needsElevation || false;
     if (!st.available) {
       rStatus.innerHTML = '<span class="badge badge-warn">✕ ' + escHtml(st.message) + '</span>';
       rInfo.textContent = st.version ? 'v' + st.version : '';
@@ -348,17 +361,12 @@ async function handleRevokeEnable() {
   const btn = document.getElementById('btnRevokeEnable');
   btn.disabled = true;
   btn.textContent = '处理中...';
+  if (revokeNeedsElevation) toast('即将弹出管理员确认，请点击「是」');
   try {
     const result = await S.enableAntiRevoke();
     if (result.success) { toast(result.message || '防撤回已启用 ✓'); loadAntiRevokeStatus(); }
-    else {
-      var msg = result.message;
-      if (msg.indexOf('EBUSY') !== -1 || msg.indexOf('locked') !== -1) {
-        msg = 'DLL 被占用，请先关闭微信后再试';
-      }
-      toast(msg, true, 4000);
-    }
-  } catch (e) { toast('操作失败: ' + e.message, true, 3000); }
+    else { toast(friendlyError(result.message), true, 4000); }
+  } catch (e) { toast('操作失败: ' + friendlyError(e.message), true, 3000); }
   finally { btn.disabled = false; btn.textContent = '启用防撤回'; }
 }
 
@@ -367,17 +375,12 @@ async function handleRevokeDisable() {
   if (!btn) return;
   btn.disabled = true;
   btn.textContent = '处理中...';
+  if (revokeNeedsElevation) toast('即将弹出管理员确认，请点击「是」');
   try {
     const result = await S.disableAntiRevoke();
     if (result.success) { toast('已恢复原文件 ✓'); loadAntiRevokeStatus(); }
-    else {
-      var msg = result.message;
-      if (msg.indexOf('EBUSY') !== -1 || msg.indexOf('locked') !== -1) {
-        msg = 'DLL 被占用，请先关闭微信后再试';
-      }
-      toast(msg, true, 4000);
-    }
-  } catch (e) { toast('操作失败: ' + e.message, true, 3000); }
+    else { toast(friendlyError(result.message), true, 4000); }
+  } catch (e) { toast('操作失败: ' + friendlyError(e.message), true, 3000); }
   finally { btn.disabled = false; btn.textContent = '恢复原文件'; }
 }
 
@@ -389,14 +392,8 @@ async function handleRevokeBackup() {
   try {
     const result = await S.backupAntiRevoke();
     if (result.success) { toast(result.message + ' ✓'); loadAntiRevokeStatus(); }
-    else {
-      var msg = result.message;
-      if (msg.indexOf('EBUSY') !== -1 || msg.indexOf('locked') !== -1) {
-        msg = 'DLL 被占用，请先关闭微信后再试';
-      }
-      toast(msg, true, 4000);
-    }
-  } catch (e) { toast('操作失败: ' + e.message, true, 3000); }
+    else { toast(friendlyError(result.message), true, 4000); }
+  } catch (e) { toast('操作失败: ' + friendlyError(e.message), true, 3000); }
   finally { btn.disabled = false; btn.textContent = '备份'; }
 }
 

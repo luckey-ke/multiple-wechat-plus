@@ -11,6 +11,9 @@
  */
 
 var fs = require('fs');
+var path = require('path');
+var os = require('os');
+var execSync = require('child_process').execSync;
 
 // ============================================================
 // Boyer-Moore 搜索器
@@ -196,9 +199,9 @@ function patchDll(dllPath, patches, options) {
     }
 
     // 备份
-    if (doBackup && !fs.existsSync(dllPath + '.bak')) {
+    if (doBackup && !hasBackup(dllPath)) {
         try {
-            fs.copyFileSync(dllPath, dllPath + '.bak');
+            backupDll(dllPath);
         } catch (e) {
             return { success: false, message: '备份失败: ' + e.message, details: [] };
         }
@@ -233,24 +236,48 @@ function patchDll(dllPath, patches, options) {
     }
 
     // 应用变更（FileUtil.EditMultiHex 逻辑）
+    for (var c = 0; c < changes.length; c++) {
+        var change = changes[c];
+        for (var b = 0; b < change.replace.length; b++) {
+            if (change.replace[b] === 0x3F) continue;
+            buf[change.position + b] = change.replace[b];
+        }
+    }
+
+    // 写入 DLL
+    var writeOk = false;
     try {
-        for (var c = 0; c < changes.length; c++) {
-            var change = changes[c];
-            for (var b = 0; b < change.replace.length; b++) {
-                if (change.replace[b] === 0x3F) {
-                    // 通配符：保留原字节，不写入
-                    continue;
-                }
-                buf[change.position + b] = change.replace[b];
-            }
-        }
         fs.writeFileSync(dllPath, buf);
+        writeOk = true;
     } catch (e) {
-        // 写入失败时尝试恢复备份
-        if (doBackup && fs.existsSync(dllPath + '.bak')) {
-            try { fs.copyFileSync(dllPath + '.bak', dllPath); } catch (ignore) {}
+        // 区分"被占用"和"权限不足"
+        if (e.code === 'EBUSY' || e.message.indexOf('busy') !== -1 || e.message.indexOf('locked') !== -1) {
+            return { success: false, message: 'DLL 被占用，请先关闭微信后再试', details: [] };
         }
-        return { success: false, message: '写入失败: ' + e.message, details: [] };
+        // 权限不足，尝试管理员权限
+        if (isInProgramFiles(dllPath)) {
+            var tmpPath = path.join(os.tmpdir(), 'wechat_patch_' + Date.now() + '.dll.tmp');
+            try {
+                fs.writeFileSync(tmpPath, buf);
+                var result = copyFileElevated(tmpPath, dllPath);
+                try { fs.unlinkSync(tmpPath); } catch (ignore) {}
+                if (result.success) {
+                    writeOk = true;
+                } else if (result.message === 'uac_canceled') {
+                    return { success: false, message: 'uac_canceled', details: [] };
+                } else {
+                    return { success: false, message: '写入失败: ' + result.message, details: [] };
+                }
+            } catch (e2) {
+                return { success: false, message: '写入失败: ' + e2.message, details: [] };
+            }
+        } else {
+            return { success: false, message: '写入失败: ' + e.message, details: [] };
+        }
+    }
+
+    if (!writeOk) {
+        return { success: false, message: '写入失败', details: [] };
     }
 
     return { success: true, message: '补丁成功', details: changes.map(function(c) {
@@ -259,24 +286,131 @@ function patchDll(dllPath, patches, options) {
 }
 
 // ============================================================
+// 路径工具
+// ============================================================
+
+/**
+ * 检测路径是否在 Program Files 目录下（任意盘符）
+ */
+function isInProgramFiles(filePath) {
+    var normalized = path.resolve(filePath).replace(/\//g, '\\').toLowerCase();
+    return /^[a-z]:\\program files( \(x86\))?\\/i.test(normalized);
+}
+
+/**
+ * 获取用户目录下的备份路径
+ */
+function getUserBackupPath(dllPath) {
+    var dir = path.join(os.homedir(), 'multiple_wechat', 'backups');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    var parentDir = path.basename(path.dirname(dllPath));
+    var basename = path.basename(dllPath);
+    return path.join(dir, parentDir + '_' + basename + '.bak');
+}
+
+// ============================================================
+// 管理员权限复制
+// ============================================================
+
+/**
+ * 用管理员权限复制文件
+ * 写 .ps1 脚本到 %TEMP%，用 Start-Process -Verb RunAs 执行
+ *
+ * @param {string} src - 源文件路径
+ * @param {string} dest - 目标文件路径
+ * @returns {{ success: boolean, message: string }}
+ */
+function copyFileElevated(src, dest) {
+    var powershell = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
+    if (!fs.existsSync(powershell)) powershell = 'powershell';
+
+    // 写 .ps1 脚本（UTF-8 BOM 确保中文路径正确）
+    var psPath = path.join(os.tmpdir(), 'wxelevate_' + Date.now() + '.ps1');
+    var script = 'Copy-Item -LiteralPath "' + src + '" -Destination "' + dest + '" -Force';
+    try {
+        fs.writeFileSync(psPath, '﻿' + script, 'utf8');
+    } catch (e) {
+        return { success: false, message: '创建临时脚本失败: ' + e.message };
+    }
+
+    // 用 -EncodedCommand 执行 Start-Process（避免引号问题）
+    var psCmd = 'Start-Process -FilePath "' + powershell + '" -ArgumentList \'-NoProfile -ExecutionPolicy Bypass -File "' + psPath + '"\' -Verb RunAs -Wait';
+    var encodedCmd = Buffer.from(psCmd, 'utf16le').toString('base64');
+
+    try {
+        execSync(powershell + ' -NoProfile -EncodedCommand ' + encodedCmd, {
+            timeout: 60000,
+            windowsHide: true,
+            stdio: 'pipe'
+        });
+        // 验证结果
+        if (!fs.existsSync(dest)) return { success: false, message: '管理员权限复制失败：目标文件未创建' };
+        return { success: true, message: 'ok' };
+    } catch (e) {
+        // 检查是否是用户取消 UAC
+        if (e.status === 1 || e.message.indexOf('canceled') !== -1 || e.message.indexOf('取消') !== -1) {
+            return { success: false, message: 'uac_canceled' };
+        }
+        return { success: false, message: '管理员权限执行失败: ' + e.message };
+    } finally {
+        try { fs.unlinkSync(psPath); } catch (ignore) {}
+    }
+}
+
+// ============================================================
 // 备份管理
 // ============================================================
 
 function hasBackup(dllPath) {
-    return fs.existsSync(dllPath + '.bak');
+    return fs.existsSync(dllPath + '.bak') || fs.existsSync(getUserBackupPath(dllPath));
 }
 
 function backupDll(dllPath) {
     if (!fs.existsSync(dllPath)) throw new Error('DLL 文件不存在');
-    fs.copyFileSync(dllPath, dllPath + '.bak');
-    return dllPath + '.bak';
+
+    // 优先存到 DLL 同目录
+    try {
+        fs.copyFileSync(dllPath, dllPath + '.bak');
+        return dllPath + '.bak';
+    } catch (e) { /* 权限不足，继续 */ }
+
+    // 回退到用户目录
+    var userBakPath = getUserBackupPath(dllPath);
+    fs.copyFileSync(dllPath, userBakPath);
+    return userBakPath;
 }
 
 function restoreDll(dllPath) {
-    var bakPath = dllPath + '.bak';
-    if (!fs.existsSync(bakPath)) return false;
-    fs.copyFileSync(bakPath, dllPath);
-    return true;
+    // 查找备份文件
+    var bakPath = null;
+    if (fs.existsSync(dllPath + '.bak')) {
+        bakPath = dllPath + '.bak';
+    } else {
+        var userBakPath = getUserBackupPath(dllPath);
+        if (fs.existsSync(userBakPath)) bakPath = userBakPath;
+    }
+    if (!bakPath) return { success: false, message: '未找到备份文件' };
+
+    // 直接写入
+    try {
+        fs.copyFileSync(bakPath, dllPath);
+        return { success: true, message: '已恢复原文件' };
+    } catch (e) {
+        // 区分"被占用"和"权限不足"
+        if (e.code === 'EBUSY' || e.message.indexOf('busy') !== -1 || e.message.indexOf('locked') !== -1) {
+            return { success: false, message: 'DLL 被占用，请先关闭微信后再试' };
+        }
+    }
+
+    // Program Files 需要管理员权限
+    if (isInProgramFiles(dllPath)) {
+        var result = copyFileElevated(bakPath, dllPath);
+        if (result.success) return { success: true, message: '已恢复原文件' };
+        if (result.message === 'uac_canceled') return { success: false, message: 'uac_canceled' };
+        return { success: false, message: '恢复失败: ' + result.message };
+    }
+
+    return { success: false, message: '恢复失败: 权限不足' };
 }
 
 // ============================================================
@@ -290,4 +424,5 @@ module.exports = {
     hasBackup: hasBackup,
     backupDll: backupDll,
     restoreDll: restoreDll,
+    isInProgramFiles: isInProgramFiles,
 };
