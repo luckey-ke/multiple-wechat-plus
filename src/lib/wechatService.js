@@ -318,11 +318,20 @@ async function startWechat(itemData) {
 
         // 策略2：rename 旧文件再复制（Windows 允许 rename 被锁文件）
         if (!lockReleased) {
+            var ts = Date.now();
+            var configBak = configPath + '.bak.' + ts;
+            var crcBak = crcPath + '.bak.' + ts;
+            // 清理可能残留的同名 .bak 文件
+            try { fs.rmSync(configBak, { force: true }); } catch (e) {}
+            try { fs.rmSync(crcBak, { force: true }); } catch (e) {}
             try {
-                if (fs.existsSync(configPath)) fs.renameSync(configPath, configPath + '.bak');
-                if (fs.existsSync(crcPath)) fs.renameSync(crcPath, crcPath + '.bak');
+                if (fs.existsSync(configPath)) fs.renameSync(configPath, configBak);
+                if (fs.existsSync(crcPath)) fs.renameSync(crcPath, crcBak);
                 fs.copyFileSync(path.join(itemData.path, 'global_config'), configPath);
                 fs.copyFileSync(path.join(itemData.path, 'global_config.crc'), crcPath);
+                // 启动前清理本次产生的 .bak 文件
+                try { fs.rmSync(configBak, { force: true }); } catch (e) {}
+                try { fs.rmSync(crcBak, { force: true }); } catch (e) {}
             } catch (e) {
                 throw new Error('无法替换配置文件，请手动关闭微信后重试: ' + e.message);
             }
