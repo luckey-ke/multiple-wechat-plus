@@ -108,6 +108,8 @@ function initLogger() {
         : path.join(os.tmpdir(), 'multiple_wechat.log');
 
     window.logger = createLogger(logPath);
+    // 生产环境只记录 error 和 fatal，开发环境记录所有级别
+    window.logger.setLevel(utools.isDev() ? 'debug' : 'error');
 }
 
 // ============================================================

@@ -120,6 +120,39 @@ function findAccountAvatar(wechatFilePath, wxid) {
 }
 
 /**
+ * 清理 config 目录下历史残留的 .bak 文件
+ * 包括：global_config.bak、global_config.bak.<wxid>、global_config.crc.bak、global_config.crc.bak.<wxid>、global_config.crcbak
+ */
+function cleanupBakFiles(wechatFilePath) {
+    try {
+        var configDir = path.join(wechatFilePath, WECHAT_PATHS.CONFIG_DIR);
+        if (!fs.existsSync(configDir)) return;
+        var files = fs.readdirSync(configDir);
+        var cleaned = 0;
+        files.forEach(function(f) {
+            // 匹配各种 .bak 残留
+            if (f === 'global_config.bak' ||
+                f === 'global_config.crc.bak' ||
+                f === 'global_config.crcbak' ||
+                /^global_config\.bak\./.test(f) ||
+                /^global_config\.crc\.bak\./.test(f)) {
+                try {
+                    fs.rmSync(path.join(configDir, f), { force: true });
+                    cleaned++;
+                } catch (e) {
+                    if (window.logger) window.logger.warn('清理 .bak 失败', f, e.message);
+                }
+            }
+        });
+        if (cleaned > 0 && window.logger) {
+            window.logger.info('清理历史残留 .bak 文件', cleaned, '个');
+        }
+    } catch (e) {
+        if (window.logger) window.logger.warn('cleanupBakFiles 失败', e.message);
+    }
+}
+
+/**
  * 获取已排序的账号列表
  *
  * 排序逻辑：
@@ -141,6 +174,9 @@ function findAccountAvatar(wechatFilePath, wxid) {
 function getSortedAccounts() {
     const wechatFilePath = getWechatFilePath();
     if (!wechatFilePath) return [];
+
+    // 清理 config 目录下历史残留的 .bak 文件
+    cleanupBakFiles(wechatFilePath);
 
     const configDirPath = path.join(wechatFilePath, WECHAT_PATHS.PLUGIN_SAVE_CONFIG);
     if (!fs.existsSync(configDirPath)) return [];
@@ -287,22 +323,35 @@ async function startWechat(itemData) {
     const configPath = path.join(wechatFilePath, WECHAT_PATHS.CONFIG_DIR, WECHAT_PATHS.GLOBAL_CONFIG);
     const crcPath = configPath + WECHAT_PATHS.CONFIG_CRC;
 
+    if (window.logger) window.logger.info('startWechat 开始', itemData ? itemData.id : '新建多开');
+
     if (itemData) {
         // 指定账号：替换配置文件
         if (!fs.existsSync(itemData.path)) {
             throw new Error('微信账号信息不存在');
         }
 
+        // 用 wxid 作为备份后缀，每个账号对应固定备份文件名，不会堆积
+        var wxid = itemData.id;
+        var configBak = configPath + '.bak.' + wxid;
+        var crcBak = crcPath + '.bak.' + wxid;
+
         // 释放文件锁（不杀进程，只释放 handle）
         let lockReleased = false;
         try {
             await releaseFileLock(configPath);
             lockReleased = true;
-        } catch (e) { /* 继续尝试其他策略 */ }
+            if (window.logger) window.logger.debug('releaseFileLock configPath 成功');
+        } catch (e) {
+            if (window.logger) window.logger.warn('releaseFileLock configPath 失败', e.message);
+        }
 
         try {
             await releaseFileLock(crcPath);
-        } catch (e) { /* crc 锁释放失败不影响主流程 */ }
+            if (window.logger) window.logger.debug('releaseFileLock crcPath 成功');
+        } catch (e) {
+            if (window.logger) window.logger.warn('releaseFileLock crcPath 失败', e.message);
+        }
 
         // 策略1：直接替换（文件锁已释放时）
         if (lockReleased) {
@@ -311,17 +360,16 @@ async function startWechat(itemData) {
                 if (fs.existsSync(crcPath)) fs.rmSync(crcPath, { force: true });
                 fs.copyFileSync(path.join(itemData.path, 'global_config'), configPath);
                 fs.copyFileSync(path.join(itemData.path, 'global_config.crc'), crcPath);
+                if (window.logger) window.logger.info('策略1 成功（直接替换）');
             } catch (e) {
+                if (window.logger) window.logger.warn('策略1 失败，回退到策略2', e.message);
                 lockReleased = false; // 回退到策略2
             }
         }
 
         // 策略2：rename 旧文件再复制（Windows 允许 rename 被锁文件）
         if (!lockReleased) {
-            var ts = Date.now();
-            var configBak = configPath + '.bak.' + ts;
-            var crcBak = crcPath + '.bak.' + ts;
-            // 清理可能残留的同名 .bak 文件
+            // 清理可能残留的同名 .bak 文件（上次启动失败留下的）
             try { fs.rmSync(configBak, { force: true }); } catch (e) {}
             try { fs.rmSync(crcBak, { force: true }); } catch (e) {}
             try {
@@ -329,11 +377,29 @@ async function startWechat(itemData) {
                 if (fs.existsSync(crcPath)) fs.renameSync(crcPath, crcBak);
                 fs.copyFileSync(path.join(itemData.path, 'global_config'), configPath);
                 fs.copyFileSync(path.join(itemData.path, 'global_config.crc'), crcPath);
-                // 启动前清理本次产生的 .bak 文件
-                try { fs.rmSync(configBak, { force: true }); } catch (e) {}
-                try { fs.rmSync(crcBak, { force: true }); } catch (e) {}
+                if (window.logger) window.logger.info('策略2 成功（rename+copy）');
             } catch (e) {
+                if (window.logger) window.logger.error('策略2 失败', e.message);
                 throw new Error('无法替换配置文件，请手动关闭微信后重试: ' + e.message);
+            } finally {
+                // 无论成功失败，都清理本次产生的 .bak
+                // 用 rename 到 .trash 后缀再删除，避免文件句柄未释放导致 rm 失败
+                try {
+                    if (fs.existsSync(configBak)) {
+                        var configTrash = configBak + '.trash';
+                        try { fs.renameSync(configBak, configTrash); } catch (e2) {}
+                        try { fs.rmSync(configTrash, { force: true }); } catch (e2) {}
+                        try { fs.rmSync(configBak, { force: true }); } catch (e2) {}
+                    }
+                } catch (e) {}
+                try {
+                    if (fs.existsSync(crcBak)) {
+                        var crcTrash = crcBak + '.trash';
+                        try { fs.renameSync(crcBak, crcTrash); } catch (e2) {}
+                        try { fs.rmSync(crcTrash, { force: true }); } catch (e2) {}
+                        try { fs.rmSync(crcBak, { force: true }); } catch (e2) {}
+                    }
+                } catch (e) {}
             }
         }
     } else {

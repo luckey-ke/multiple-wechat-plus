@@ -84,7 +84,6 @@ function Logger(log_file_path) {
             encoding: 'utf8',
             mode: 0o666,
         });
-        this.stream.write('\n');
         this.write = (text) => this.stream.write(text);
     }
 }
