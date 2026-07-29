@@ -152,18 +152,10 @@ function isAlreadyReplaced(buf, start, replace) {
  */
 function isPatched(buf, patches) {
     for (var i = 0; i < patches.length; i++) {
-        var searchMatches = matchAll(buf, patches[i].search);
-        if (searchMatches.length > 0) continue; // 原始代码还在，未打补丁
-
-        // 原始代码不存在，检查替换代码是否存在
         var replaceMatches = matchAll(buf, patches[i].replace);
-        if (replaceMatches.length > 0) return true; // 已被本工具打过补丁
-
-        // 两者都不存在，可能是被其他工具改过（如 RevokeMsgPatcher 用了不同的 Replace）
-        // 只要 Search 消失就视为已修改
-        return true;
+        if (replaceMatches.length > 0) return true; // replace 存在 → 已打补丁
     }
-    return false;
+    return false; // replace 不存在 → 未打补丁或新版本
 }
 
 // ============================================================

@@ -112,8 +112,8 @@ function findPatch(version) {
     for (var i = 0; i < allEntries.length; i++) {
         var entry = allEntries[i];
         var inRange = true;
-        // RevokeMsgPatcher: start < version <= end（起点开区间，终点闭区间）
-        if (entry.startVersion && compareVersion(version, entry.startVersion) <= 0) inRange = false;
+        // start <= version <= end（闭区间，与 RevokeMsgPatcher 的 EndVersion 闭区间一致）
+        if (entry.startVersion && compareVersion(version, entry.startVersion) < 0) inRange = false;
         if (entry.endVersion && entry.endVersion !== '' && compareVersion(version, entry.endVersion) > 0) inRange = false;
 
         if (inRange) {
