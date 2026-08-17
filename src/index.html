@@ -20,6 +20,7 @@
     @keyframes popIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
     .config-popover .pop-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
     .config-popover .pop-path { font-size: 11px; color: #8395a7; word-break: break-all; line-height: 1.4; margin-bottom: 10px; }
+    .config-popover .pop-desc { font-size: 11px; color: #8395a7; line-height: 1.7; margin-bottom: 10px; padding: 8px 12px; background: #f8f9fa; border-radius: 8px; }
     .config-popover .pop-actions { display: flex; gap: 8px; }
     .progress-wrap { width: 100%; height: 6px; background: #f0f2f5; border-radius: 3px; overflow: hidden; margin-bottom: 10px; display: none; }
     .progress-wrap.show { display: block; }
@@ -307,6 +308,14 @@ async function loadDashboard() {
 
 // 存储各配置项的详情 HTML
 var configDetails = {};
+
+// 各配置卡片的功能简述（浮窗顶部展示）
+var configDescs = {
+  handle: '微软官方系统工具，用于查找并解除微信进程对配置文件的占用，是多开和免登启动的前提。',
+  path: '微信聊天记录等数据的存放目录（xwechat_files），多开账号的配置文件从这里读取。',
+  revoke: '对微信 DLL 打二进制补丁，撤回的消息不再消失并显示撤回提示，需先关闭微信。',
+  blockupdate: '修改微信 DLL 使更新器无法启动，防止自动升级导致防撤回等补丁失效，需先关闭微信。',
+};
 
 function renderConfig(status) {
   // handle.exe
@@ -655,6 +664,7 @@ document.querySelector('.config-bar').addEventListener('click', (e) => {
 
   // 设置内容
   popover.innerHTML = '<div class="pop-title">' + escHtml(detail.title) + '</div>' +
+    (configDescs[key] ? '<div class="pop-desc">' + escHtml(configDescs[key]) + '</div>' : '') +
     (detail.path ? '<div class="pop-path">' + escHtml(detail.path) + '</div>' : '') +
     (detail.progress || '') +
     (detail.actions ? '<div class="pop-actions">' + detail.actions + '</div>' : '');
