@@ -19,10 +19,11 @@ var patchesIndex = require('./patches');
  * 根据微信版本查找匹配的补丁定义
  *
  * @param {string} version - 微信版本号，如 '4.0.6.26'
+ * @param {string} [category] - 可选，按类别过滤（如 '撤回'、'禁止更新'），缺省不过滤
  * @returns {Object|null} { dllFile, patches, name } 或 null
  */
-function findPatch(version) {
-    return patchesIndex.findPatch(version);
+function findPatch(version, category) {
+    return patchesIndex.findPatch(version, category);
 }
 
 /**

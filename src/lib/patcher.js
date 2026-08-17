@@ -172,12 +172,15 @@ function isPatched(buf, patches) {
  * @param {Object} [options] - 选项
  * @param {boolean} [options.force=false] - 强制补丁
  * @param {boolean} [options.backup=true] - 是否备份
+ * @param {boolean} [options.skipCheck=false] - 跳过 isPatched 早退检查（反向补丁必须传 true，
+ *   否则原始字符串会让 isPatched 误报"已打过"）
  * @returns {{ success: boolean, message: string, details: Array }}
  */
 function patchDll(dllPath, patches, options) {
     options = options || {};
     var force = options.force || false;
     var doBackup = options.backup !== false;
+    var skipCheck = options.skipCheck || false;
 
     if (!fs.existsSync(dllPath)) {
         return { success: false, message: 'DLL 文件不存在: ' + dllPath, details: [] };
@@ -186,7 +189,7 @@ function patchDll(dllPath, patches, options) {
     var buf = fs.readFileSync(dllPath);
 
     // 检测是否已打补丁
-    if (!force && isPatched(buf, patches)) {
+    if (!skipCheck && !force && isPatched(buf, patches)) {
         return { success: true, message: '已打过补丁，无需重复操作', details: [] };
     }
 

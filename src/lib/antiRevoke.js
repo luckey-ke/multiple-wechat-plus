@@ -127,7 +127,7 @@ function getStatus() {
         }
 
         // 查找补丁定义（只调一次）
-        var patchDef = patchDb.findPatch(version);
+        var patchDef = patchDb.findPatch(version, '撤回');
         var baseDllFile = patchDef ? patchDef.dllFile : (version.indexOf('4.') === 0 ? 'Weixin.dll' : 'WeChatWin.dll');
 
         var dllPath = findDllPath(exeDir, baseDllFile);
@@ -201,7 +201,7 @@ function enable() {
         var version = detectWechatVersion(exeDir);
         if (!version) return { success: false, message: '无法检测微信版本' };
 
-        var patchDef = patchDb.findPatch(version);
+        var patchDef = patchDb.findPatch(version, '撤回');
         var baseDllFile = patchDef ? patchDef.dllFile : (version.indexOf('4.') === 0 ? 'Weixin.dll' : 'WeChatWin.dll');
 
         var dllPath = findDllPath(exeDir, baseDllFile);
@@ -230,7 +230,7 @@ function disable() {
         var version = detectWechatVersion(exeDir);
         if (!version) return { success: false, message: '无法检测微信版本' };
 
-        var patchDef = patchDb.findPatch(version);
+        var patchDef = patchDb.findPatch(version, '撤回');
         var baseDllFile = patchDef ? patchDef.dllFile : (version.indexOf('4.') === 0 ? 'Weixin.dll' : 'WeChatWin.dll');
 
         var dllPath = findDllPath(exeDir, baseDllFile);
@@ -260,7 +260,7 @@ function backup() {
         var version = detectWechatVersion(exeDir);
         if (!version) return { success: false, message: '无法检测微信版本' };
 
-        var patchDef = patchDb.findPatch(version);
+        var patchDef = patchDb.findPatch(version, '撤回');
         var baseDllFile = patchDef ? patchDef.dllFile : (version.indexOf('4.') === 0 ? 'Weixin.dll' : 'WeChatWin.dll');
 
         var dllPath = findDllPath(exeDir, baseDllFile);
@@ -295,4 +295,6 @@ module.exports = {
     disable: disable,
     backup: backup,
     getWechatExeDir: getWechatExeDir,
+    detectWechatVersion: detectWechatVersion,
+    findDllPath: findDllPath,
 };

@@ -64,13 +64,14 @@ try {
             var data = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
             if (!data.ReplacePatterns || !data.StartVersion) continue;
 
-            // 只取防撤回相关的补丁
+            // 加载全部类别的补丁（防撤回 / 禁止更新等）
             var patches = [];
             for (var j = 0; j < data.ReplacePatterns.length; j++) {
                 var p = data.ReplacePatterns[j];
-                if (p.Category && p.Category.indexOf('撤回') !== -1) {
+                if (p.Category) {
                     patches.push({
                         name: p.Category,
+                        category: p.Category,
                         search: p.Search,     // 直接使用十进制数组
                         replace: p.Replace,   // 直接使用十进制数组
                     });
@@ -106,9 +107,10 @@ allEntries.sort(function(a, b) {
  * 根据微信版本查找匹配的补丁定义
  *
  * @param {string} version - 微信版本号
+ * @param {string} [category] - 可选，按类别过滤（如 '撤回'、'禁止更新'），缺省不过滤
  * @returns {Object|null} { dllFile, patches, name } 或 null
  */
-function findPatch(version) {
+function findPatch(version, category) {
     for (var i = 0; i < allEntries.length; i++) {
         var entry = allEntries[i];
         var inRange = true;
@@ -117,10 +119,19 @@ function findPatch(version) {
         if (entry.endVersion && entry.endVersion !== '' && compareVersion(version, entry.endVersion) > 0) inRange = false;
 
         if (inRange) {
+            // 按类别过滤
+            var patches = entry.patches;
+            if (category) {
+                patches = patches.filter(function(p) {
+                    return p.category.indexOf(category) !== -1;
+                });
+            }
+            if (patches.length === 0) continue;
+
             return {
                 dllFile: entry.dllFile,
-                patches: entry.patches,
-                name: '防撤回',
+                patches: patches,
+                name: category || patches[0].category,
             };
         }
     }

@@ -17,6 +17,7 @@
 const { initShared, getWechatFilePath, setWechatFilePath, getAccountOrder, saveAccountOrder } = require('./lib/shared');
 const { downloadHandle, HANDLE_EXE_PATH } = require('./lib/kill');
 const antiRevoke = require('./lib/antiRevoke');
+const blockUpdate = require('./lib/blockUpdate');
 const {
     getConfigStatus,
     getSortedAccounts,
@@ -216,6 +217,33 @@ window.services = {
      */
     backupAntiRevoke() {
         return antiRevoke.backup();
+    },
+
+    /**
+     * 获取禁止更新状态
+     *
+     * @returns {Promise<Object>} 状态对象
+     */
+    getBlockUpdateStatus() {
+        return blockUpdate.getStatus();
+    },
+
+    /**
+     * 禁止微信更新
+     *
+     * @returns {Promise<Object>} 操作结果
+     */
+    enableBlockUpdate() {
+        return blockUpdate.enable();
+    },
+
+    /**
+     * 还原微信更新
+     *
+     * @returns {Promise<Object>} 操作结果
+     */
+    disableBlockUpdate() {
+        return blockUpdate.disable();
     },
 
     /**

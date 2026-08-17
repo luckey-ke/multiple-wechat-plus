@@ -15,6 +15,7 @@
 const { initShared, getAccountOrder, saveAccountOrder, getWechatFilePath } = require('./lib/shared');
 const { downloadHandle, HANDLE_EXE_PATH } = require('./lib/kill');
 const antiRevoke = require('./lib/antiRevoke');
+const blockUpdate = require('./lib/blockUpdate');
 const path = require('path');
 const {
     getConfigStatus,
@@ -151,6 +152,24 @@ window.disableAntiRevoke = function() { return antiRevoke.disable(); };
  * @returns {Promise<Object>}
  */
 window.backupAntiRevoke = function() { return antiRevoke.backup(); };
+
+/**
+ * 获取禁止更新状态
+ * @returns {Promise<Object>}
+ */
+window.getBlockUpdateStatus = function() { return blockUpdate.getStatus(); };
+
+/**
+ * 禁止微信更新
+ * @returns {Promise<Object>}
+ */
+window.enableBlockUpdate = function() { return blockUpdate.enable(); };
+
+/**
+ * 还原微信更新
+ * @returns {Promise<Object>}
+ */
+window.disableBlockUpdate = function() { return blockUpdate.disable(); };
 
 /**
  * 在文件管理器中打开指定路径

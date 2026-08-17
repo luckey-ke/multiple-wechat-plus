@@ -9,7 +9,7 @@
     body { font-family: -apple-system, "Microsoft YaHei", "PingFang SC", sans-serif; background: #f5f6fa; color: #2d3436; padding: 20px; min-height: 100vh; }
     .dashboard { max-width: 680px; margin: 0 auto; }
     h2.section-title { font-size: 14px; font-weight: 600; color: #636e72; margin-bottom: 10px; padding-left: 2px; }
-    .config-bar { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 20px; position: relative; }
+    .config-bar { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 12px; margin-bottom: 20px; position: relative; }
     .config-card { background: #fff; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); padding: 14px 16px; cursor: pointer; transition: all 0.15s; border: 2px solid transparent; }
     .config-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
     .config-card.active { border-color: #0984e3; box-shadow: 0 2px 12px rgba(9,132,227,0.15); }
@@ -133,6 +133,10 @@
         <div class="card-label">防撤回</div>
         <div class="card-value" id="revokeStatus"><span class="loading" style="padding:0;font-size:12px"></span></div>
       </div>
+      <div class="config-card" data-config="blockupdate">
+        <div class="card-label">禁止更新</div>
+        <div class="card-value" id="blockUpdateStatus"><span class="loading" style="padding:0;font-size:12px"></span></div>
+      </div>
       <div class="config-popover" id="configPopover"></div>
     </div>
     <h2 class="section-title">⚡ 快捷操作</h2>
@@ -168,12 +172,13 @@
             <li>多开免登需要<b>按首次保存顺序</b>依次启动</li>
           </ul>
 
-          <h4><span class="step-num">4</span> 防撤回</h4>
+          <h4><span class="step-num">4</span> 防撤回 / 禁止更新</h4>
           <ul>
             <li>在「配置状态」区域可查看微信版本和防撤回支持状态</li>
             <li><b>启用前需先关闭微信</b>，否则会提示 DLL 被占用</li>
             <li>点击「启用防撤回」会对微信 DLL 打补丁（自动备份原文件）</li>
             <li>点击「备份」可手动备份原 DLL，点击「恢复原文件」可还原（需关闭微信）</li>
+            <li><b>禁止更新</b> — 点击「禁止更新」可阻止微信自动升级（防止补丁失效），「还原更新」可恢复；与防撤回互不影响</li>
           </ul>
 
           <h4><span class="step-num">5</span> 其他操作</h4>
@@ -227,6 +232,7 @@ let allAccounts = [];
 let displayAccounts = [];
 let busy = false;
 let revokeNeedsElevation = false;
+let blockUpdateNeedsElevation = false;
 
 // ===== Toast =====
 function toast(msg, isError, duration) {
@@ -349,8 +355,9 @@ function renderConfig(status) {
     };
   }
 
-  // 防撤回状态（异步加载）
+  // 防撤回 / 禁止更新状态（异步加载）
   loadAntiRevokeStatus();
+  loadBlockUpdateStatus();
 }
 
 function loadAntiRevokeStatus() {
@@ -412,6 +419,76 @@ function loadAntiRevokeStatus() {
   }).catch(function() {
     rStatus.innerHTML = '<span class="badge badge-warn">✕ 加载失败</span>';
   });
+}
+
+function loadBlockUpdateStatus() {
+  var bStatus = document.getElementById('blockUpdateStatus');
+  bStatus.innerHTML = '<span class="loading" style="padding:0;font-size:12px"></span>';
+
+  S.getBlockUpdateStatus().then(function(st) {
+    blockUpdateNeedsElevation = st.needsElevation || false;
+    if (!st.available) {
+      bStatus.innerHTML = '<span class="badge badge-warn">✕ ' + escHtml(st.message) + '</span>';
+      configDetails.blockupdate = {
+        title: '禁止更新',
+        path: st.version ? 'v' + st.version : '',
+        actions: '',
+        onShow: function() {}
+      };
+      return;
+    }
+    if (st.enabled) {
+      bStatus.innerHTML = '<span class="badge badge-ok">✓ 已启用</span>';
+      configDetails.blockupdate = {
+        title: '禁止更新',
+        path: st.version + ' · ' + st.dllFile,
+        actions: '<button class="btn btn-ghost btn-sm" id="btnBlockUpdateDisable">还原更新</button>',
+        onShow: function() {
+          document.getElementById('btnBlockUpdateDisable').onclick = handleBlockUpdateDisable;
+        }
+      };
+    } else {
+      bStatus.innerHTML = '<span class="badge badge-warn">未启用</span>';
+      configDetails.blockupdate = {
+        title: '禁止更新',
+        path: st.version + ' · ' + st.dllFile,
+        actions: '<button class="btn btn-primary btn-sm" id="btnBlockUpdateEnable">禁止更新</button>',
+        onShow: function() {
+          document.getElementById('btnBlockUpdateEnable').onclick = handleBlockUpdateEnable;
+        }
+      };
+    }
+  }).catch(function() {
+    bStatus.innerHTML = '<span class="badge badge-warn">✕ 加载失败</span>';
+  });
+}
+
+async function handleBlockUpdateEnable() {
+  const btn = document.getElementById('btnBlockUpdateEnable');
+  if (!btn) return;
+  btn.disabled = true;
+  btn.textContent = '处理中...';
+  if (blockUpdateNeedsElevation) toast('即将弹出管理员确认，请点击「是」');
+  try {
+    const result = await S.enableBlockUpdate();
+    if (result.success) { toast('已禁止更新 ✓'); loadBlockUpdateStatus(); }
+    else { toast(friendlyError(result.message), true, 4000); }
+  } catch (e) { toast('操作失败: ' + friendlyError(e.message), true, 3000); }
+  finally { btn.disabled = false; btn.textContent = '禁止更新'; }
+}
+
+async function handleBlockUpdateDisable() {
+  const btn = document.getElementById('btnBlockUpdateDisable');
+  if (!btn) return;
+  btn.disabled = true;
+  btn.textContent = '处理中...';
+  if (blockUpdateNeedsElevation) toast('即将弹出管理员确认，请点击「是」');
+  try {
+    const result = await S.disableBlockUpdate();
+    if (result.success) { toast('已还原更新 ✓'); loadBlockUpdateStatus(); }
+    else { toast(friendlyError(result.message), true, 4000); }
+  } catch (e) { toast('操作失败: ' + friendlyError(e.message), true, 3000); }
+  finally { btn.disabled = false; btn.textContent = '还原更新'; }
 }
 
 async function handleRevokeEnable() {
