@@ -13,7 +13,7 @@
  */
 
 const { initShared, getAccountOrder, saveAccountOrder, getWechatFilePath } = require('./lib/shared');
-const { downloadHandle, HANDLE_EXE_PATH } = require('./lib/kill');
+const { downloadHandle, installLocalHandle, HANDLE_EXE_PATH } = require('./lib/kill');
 const antiRevoke = require('./lib/antiRevoke');
 const blockUpdate = require('./lib/blockUpdate');
 const path = require('path');
@@ -84,6 +84,13 @@ window.deleteWechat = deleteWechat;
  * @returns {Promise<string>} 下载结果
  */
 window.downloadHandle = downloadHandle;
+
+/**
+ * 从插件内置压缩包本地安装 handle.exe（离线可用）
+ * @async
+ * @returns {Promise<string>} 安装结果
+ */
+window.installLocalHandle = installLocalHandle;
 
 /**
  * 获取账号排序顺序

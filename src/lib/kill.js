@@ -117,6 +117,51 @@ function downloadHandle() {
 }
 
 // ============================================================
+// handle.exe 本地安装
+// ============================================================
+
+/**
+ * 从插件内置的 Handle.zip 安装 handle.exe（离线安装）
+ *
+ * Handle.zip 随插件打包在 src/lib/ 目录下，
+ * 适用于无网络或不想从微软官网下载的场景。
+ *
+ * @returns {Promise<string>} 安装结果提示
+ * @throws {Error} 内置压缩包不存在、解压失败等
+ *
+ * @example
+ * installLocalHandle()
+ *     .then((msg) => console.log(msg)) // 'handle.exe 本地安装成功！'
+ *     .catch((e) => console.error(e.message));
+ */
+function installLocalHandle() {
+    return new Promise((resolve, reject) => {
+        if (fs.existsSync(HANDLE_EXE_PATH)) {
+            return resolve('handle.exe 已存在，无需安装');
+        }
+
+        const localZipPath = path.join(__dirname, 'Handle.zip');
+        if (!fs.existsSync(localZipPath)) {
+            return reject(new Error('内置 Handle.zip 不存在'));
+        }
+
+        logger.info('从内置压缩包安装 handle.exe...');
+        try {
+            const zip = new AdmZip(localZipPath);
+            zip.extractAllTo(basePath, true);
+            if (!fs.existsSync(HANDLE_EXE_PATH)) {
+                return reject(new Error('解压完成但未找到 handle.exe'));
+            }
+            logger.info('handle.exe 本地安装成功');
+            resolve('handle.exe 本地安装成功！');
+        } catch (err) {
+            logger.error('本地安装失败', err.message);
+            reject(new Error('本地安装失败: ' + err.message));
+        }
+    });
+}
+
+// ============================================================
 // 句柄关闭（内部函数）
 // ============================================================
 
@@ -286,6 +331,7 @@ module.exports = {
     // 核心功能
     releaseMutex,
     downloadHandle,
+    installLocalHandle,
     releaseFileLock,
     closeHandle,
 

@@ -335,9 +335,12 @@ function renderConfig(status) {
     hStatus.innerHTML = '<span class="badge badge-warn">✕ 未安装</span>';
     configDetails.handle = {
       title: 'handle.exe',
-      path: '',
-      actions: '<button class="btn btn-primary btn-sm" id="btnDownload">下载 handle.exe</button>',
-      onShow: function() { document.getElementById('btnDownload').onclick = handleDownload; }
+      path: '用于释放微信的进程互斥锁和文件锁',
+      actions: '<button class="btn btn-primary btn-sm" id="btnLocalInstall">📦 本地安装</button> <button class="btn btn-ghost btn-sm" id="btnDownload">⬇️ 在线下载</button>',
+      onShow: function() {
+        document.getElementById('btnLocalInstall').onclick = handleLocalInstall;
+        document.getElementById('btnDownload').onclick = handleDownload;
+      }
     };
   }
 
@@ -746,9 +749,23 @@ async function handleDownload() {
     toast('下载成功 ✓');
     loadDashboard();
   } catch (e) {
-    toast('下载失败: ' + e.message, true, 3000);
+    toast('下载失败: ' + e.message + '，可尝试「本地安装」', true, 4000);
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = btn.id === 'btnDownload' ? '下载 handle.exe' : '重新下载'; }
+  }
+}
+
+async function handleLocalInstall() {
+  var btn = document.getElementById('btnLocalInstall');
+  if (btn) { btn.disabled = true; btn.textContent = '安装中...'; }
+  try {
+    const msg = await S.installLocalHandle();
+    toast(msg + ' ✓');
+    loadDashboard();
+  } catch (e) {
+    toast('本地安装失败: ' + e.message, true, 3000);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '📦 本地安装'; }
   }
 }
 

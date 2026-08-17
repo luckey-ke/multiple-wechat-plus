@@ -15,7 +15,7 @@
  */
 
 const { initShared, getWechatFilePath, setWechatFilePath, getAccountOrder, saveAccountOrder } = require('./lib/shared');
-const { downloadHandle, HANDLE_EXE_PATH } = require('./lib/kill');
+const { downloadHandle, installLocalHandle, HANDLE_EXE_PATH } = require('./lib/kill');
 const antiRevoke = require('./lib/antiRevoke');
 const blockUpdate = require('./lib/blockUpdate');
 const {
@@ -102,6 +102,18 @@ window.services = {
      */
     async downloadHandle() {
         return downloadHandle();
+    },
+
+    /**
+     * 从插件内置压缩包本地安装 handle.exe（离线可用）
+     *
+     * Handle.zip 随插件打包，无需联网。
+     *
+     * @returns {Promise<string>} 安装结果提示
+     * @throws {Error} 内置压缩包不存在、解压失败等
+     */
+    async installLocalHandle() {
+        return installLocalHandle();
     },
 
     /**
